@@ -10,36 +10,36 @@ from utils import *
 
 class BayesianLearner:
     def __init__(self,
-                 goal: int,
+                 goal_color: int,
                  receptive_field: int,
                  grid_size: int=20,
-                 num_doors: int=4,
+                 num_colors: int=4,
                  save_render: bool=False,
-                 max_steps: int=100
+                 max_steps: int=200
                  ) -> None:
         
-        self.goal = goal + 1
+        self.goal_color = goal_color + 1
         self.receptive_field = receptive_field
         self.max_steps = max_steps
 
         # Init with uniform beliefs (no prior)
         self.beliefs = 1 / 4 * np.ones((grid_size, grid_size, 4))
 
-        # Prior on the walls
-        for i in range(0, grid_size):
-            for j in range(0, grid_size):
-                self.beliefs[0, i, :] = np.array([0,1,0,0])
-                self.beliefs[grid_size - 1, i, :] = np.array([0,1,0,0])
-                self.beliefs[j, 0, :] = np.array([0,1,0,0])
-                self.beliefs[j, grid_size - 1, :] = np.array([0,1,0,0])
+        # # Prior on the walls
+        # for i in range(0, grid_size):
+        #     for j in range(0, grid_size):
+        #         self.beliefs[0, i, :] = np.array([0,1,0,0])
+        #         self.beliefs[grid_size - 1, i, :] = np.array([0,1,0,0])
+        #         self.beliefs[j, 0, :] = np.array([0,1,0,0])
+        #         self.beliefs[j, grid_size - 1, :] = np.array([0,1,0,0])
 
         # Generate feasable environment
-        has_path_key_door = False
-        while not has_path_key_door:
+        feasible = False
+        while not feasible:
 
             # Generate env
             self.init_env(grid_size=grid_size,
-                        num_doors=num_doors)
+                          num_colors=num_colors)
             self.env.reset()
 
             # Check feasability
@@ -48,41 +48,41 @@ class BayesianLearner:
                 for j in range(self.env.width):
                     grid[i, j] = self.env.grid.get(i,j) is not None
 
-            key_pos = self.env.obj_idx[2 * self.goal]
-            grid[key_pos[0], key_pos[1]] = 0
-            path_key = A_star_algorithm(start=self.env.agent_pos, goal=key_pos, grid=grid)
+            subgoal_pos = self.env.obj_idx[2 * self.goal_color]
+            grid[subgoal_pos[0], subgoal_pos[1]] = 0
+            path_subgoal = A_star_algorithm(start=self.env.agent_pos, goal=subgoal_pos, grid=grid)
 
-            door_pos = self.env.obj_idx[2 * self.goal - 1]
-            grid[door_pos[0], door_pos[1]] = 0
-            path_door = A_star_algorithm(start=self.env.agent_pos, goal=door_pos, grid=grid)
+            goal_pos = self.env.obj_idx[2 * self.goal_color - 1]
+            grid[goal_pos[0], goal_pos[1]] = 0
+            path_goal = A_star_algorithm(start=self.env.agent_pos, goal=goal_pos, grid=grid)
 
-            has_path_key_door = path_door is not None and path_key is not None
+            feasible = path_goal is not None and path_subgoal is not None
         
-        self.has_key = False
+        self.reached_subgoal = False
 
         self.actions = SimpleQueue()
         self.transitions = SimpleQueue()
 
         self.reward = 0
-        self.going_to_key = False
-        self.going_to_door = False
+        self.going_to_subgoal = False
+        self.going_to_goal = False
 
         # For rendering
         self.save_render = save_render
         self.render_frames = []
         self.render_beliefs = []
 
-    def init_env(self, grid_size: int=20, num_doors: int=4) -> None:
+    def init_env(self, grid_size: int=20, num_colors: int=4) -> None:
         agent_start_pos = (grid_size//2, grid_size-2) # tuple(np.random.randint(1, grid_size - 1, size=2))
         agent_start_dir = 3 # np.random.randint(0, 4)
 
         self.env = MultiGoalsEnv(render_mode = "rgb_array",
-                                 agent_goal=self.goal,
+                                 agent_goal=self.goal_color,
                                  size=grid_size,
                                  agent_start_pos=agent_start_pos,
                                  agent_start_dir=agent_start_dir,
                                  agent_view_size=self.receptive_field,
-                                 num_doors=num_doors,
+                                 num_colors=num_colors,
                                  max_steps=self.max_steps)
     
     def play(self, size: int=None) -> None:
@@ -133,7 +133,7 @@ class BayesianLearner:
         # For each cell in the visibility mask
         for vis_j in range(0, self.receptive_field):
             for vis_i in range(0, self.receptive_field):
-                # If this cell is not visible, don't highlight it
+                
                 if not vis_mask[vis_i, vis_j]:
                     continue
 
@@ -144,18 +144,18 @@ class BayesianLearner:
                 if abs_j < 0 or abs_j >= self.env.height:
                     continue
 
-                # Door
-                if (obs[vis_i, vis_j, :2] == np.array([4, self.goal])).all() and (self.env.agent_pos != (abs_i, abs_j)):
-                    # Projection
-                    self.beliefs[:, :, 2] = np.zeros_like(self.beliefs[:, :,2])
-                    self.beliefs /= self.beliefs.sum(axis=2).reshape(self.env.height, self.env.width, -1)
+                # Goal (door)
+                if (obs[vis_i, vis_j, :2] == np.array([4, self.goal_color])).all() and (self.env.agent_pos != (abs_i, abs_j)):
+                    # # Projection
+                    # self.beliefs[:, :, 2] = np.zeros_like(self.beliefs[:, :,2])
+                    # self.beliefs /= self.beliefs.sum(axis=2).reshape(self.env.height, self.env.width, -1)
                     # Only one door
                     self.beliefs[abs_i, abs_j, :] = np.array([0, 0, 1, 0])
-                # Key
-                elif (obs[vis_i, vis_j, :2] == np.array([5, self.goal])).all() and (self.env.agent_pos != (abs_i, abs_j)):
-                    # Projection
-                    self.beliefs[:, :, 3] = np.zeros_like(self.beliefs[:, :, 3])
-                    self.beliefs /= self.beliefs.sum(axis=2).reshape(self.env.height, self.env.width, -1)
+                # Subgoal (key)
+                elif (obs[vis_i, vis_j, :2] == np.array([5, self.goal_color])).all() and (self.env.agent_pos != (abs_i, abs_j)):
+                    # # Projection
+                    # self.beliefs[:, :, 3] = np.zeros_like(self.beliefs[:, :, 3])
+                    # self.beliefs /= self.beliefs.sum(axis=2).reshape(self.env.height, self.env.width, -1)
                     # Only one key
                     self.beliefs[abs_i, abs_j, :] = np.array([0, 0, 0, 1])
                 # Obstacle
@@ -163,8 +163,8 @@ class BayesianLearner:
                     self.beliefs[abs_i, abs_j, :] = np.array([0, 1, 0, 0])
                 # Nothing
                 else:
-                    if (obs[vis_i, vis_j, :2] == np.array([5, self.goal])).all() and (self.env.agent_pos == (abs_i, abs_j)):
-                        self.has_key = True
+                    if (obs[vis_i, vis_j, :2] == np.array([5, self.goal_color])).all() and (self.env.agent_pos == (abs_i, abs_j)):
+                        self.reached_subgoal = True
                     self.beliefs[abs_i, abs_j, :] = np.array([1, 0, 0, 0])
     
     def compute_exploration_score(self, dir: int, pos: tuple) -> float:
@@ -237,7 +237,7 @@ class BayesianLearner:
                 grid = np.ones((self.env.width, self.env.height)) - np.all(self.beliefs == np.array([1., 0., 0., 0.]).reshape(1, 1, -1), axis=2)
                 grid[dest_pos[0], dest_pos[1]] = 0
                 
-                # If the intermediate goal is not reacheable change goal
+                # If the intermediate exploratory goal is not reacheable change exploratory goal
                 while dist[dest_idx] < 10e5:
                     path = A_star_algorithm(self.env.agent_pos, dest_pos, grid)
                     if path is None:
@@ -258,6 +258,7 @@ class BayesianLearner:
             
 
     def add_actions(self, pos_dest: tuple) -> None:
+        # Mapping position transition --> actions
         dx = self.env.agent_pos[0] - pos_dest[0]
         dy = self.env.agent_pos[1] - pos_dest[1]
         if dx < 0:
@@ -316,7 +317,7 @@ class BayesianLearner:
             elif self.env.agent_dir == 3:
                 self.actions.put(2)
 
-    def obs_in_front(self, obj_idx: int) -> bool:
+    def obj_in_front(self, obj_idx: int) -> bool:
 
         dx, dy = 0, 0
         if self.env.agent_dir == 0:
@@ -334,39 +335,41 @@ class BayesianLearner:
     def policy(self):
             
         if self.env.step_count == 0:
-            return 4 # unused
-    
-        if self.obs_in_front(obj_idx=3):
+            return 4 # unused (to get first observation)
 
-            self.going_to_key = False
-            # Key reached --> empty queues
+        # Subgoal (key) in front of the agent
+        if self.obj_in_front(obj_idx=3):
+
+            self.going_to_subgoal = False
+            # Subgoal (key) reached --> empty queues
             while not self.transitions.empty():
                 _ = self.transitions.get()
             while not self.actions.empty():
                 _ = self.actions.get()
-            # Pickup the key
+            # Pickup the subgoal (key)
             return 3
         
-        if self.obs_in_front(obj_idx=2) and self.has_key:
+        # Goal (door) in front of the agent
+        if self.obj_in_front(obj_idx=2) and self.reached_subgoal:
 
-            self.going_to_door = False
-            # Door reached --> empty queues
+            self.going_to_goal = False
+            # Goal (door) reached --> empty queues
             while not self.transitions.empty():
                 _ = self.transitions.get()
             while not self.actions.empty():
                 _ = self.actions.get()
-            # Open the door
+            # Open the goal (door)
             return 5
 
-        # If know where is the key & not already going to the key --> go to the key
-        if (self.beliefs[:, :, 3] == 1).any() and not self.going_to_key:
+        # If know where is the subgoal (key) & not already going to the subgoal (key) --> go to the subgoal (key)
+        if (self.beliefs[:, :, 3] == 1).any() and not self.going_to_subgoal:
 
-            key_pos = np.where(self.beliefs[:, :, 3] == 1)
+            subgoal_pos = np.where(self.beliefs[:, :, 3] == 1)
             # Obstacle grid
             grid = np.ones((self.env.width, self.env.height)) - np.all(self.beliefs == np.array([1., 0., 0., 0.]).reshape(1, 1, -1), axis=2)
-            grid[key_pos[0], key_pos[1]] = 0
+            grid[subgoal_pos[0], subgoal_pos[1]] = 0
             
-            path = A_star_algorithm(self.env.agent_pos, key_pos, grid)
+            path = A_star_algorithm(self.env.agent_pos, subgoal_pos, grid)
 
             if path is not None:
                 # Empty queues
@@ -378,19 +381,19 @@ class BayesianLearner:
                 for transition in path:
                     self.transitions.put(transition)
                 # Set variable
-                self.going_to_key = True
+                self.going_to_subgoal = True
                 # Return action
                 return self.policy()
 
-        # If know where is the door & has key & not already going to the door --> go to the door
-        elif (self.beliefs[:, :, 2] == 1).any() and self.has_key and not self.going_to_door:
+        # If know where is the goal (door) & has key & not already going to the goal (door) --> go to the goal (door)
+        elif (self.beliefs[:, :, 2] == 1).any() and self.reached_subgoal and not self.going_to_goal:
 
-            door_pos = np.where(self.beliefs[:, :, 2] == 1)
+            goal_pos = np.where(self.beliefs[:, :, 2] == 1)
             # Obstacle grid
             grid = np.ones((self.env.width, self.env.height)) - np.all(self.beliefs == np.array([1., 0., 0., 0.]).reshape(1, 1, -1), axis=2)
-            grid[door_pos[0], door_pos[1]] = 0
+            grid[goal_pos[0], goal_pos[1]] = 0
 
-            path = A_star_algorithm(self.env.agent_pos, door_pos, grid)
+            path = A_star_algorithm(self.env.agent_pos, goal_pos, grid)
 
             if path is not None:
                 # Empty queues
@@ -398,11 +401,11 @@ class BayesianLearner:
                     _ = self.transitions.get()
                 while not self.actions.empty():
                     _ = self.actions.get()
-                # Add transitions to go to door
+                # Add transitions to go to goal (door)
                 for transition in path:
                     self.transitions.put(transition)
                 # Set variable
-                self.going_to_door = True
+                self.going_to_goal = True
                 # Return action
                 return self.policy()
         
