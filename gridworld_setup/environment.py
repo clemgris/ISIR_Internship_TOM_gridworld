@@ -17,12 +17,12 @@ class MultiGoalsEnv(MiniGridEnv):
         size=20,
         agent_start_pos: tuple=(1, 1),
         agent_start_dir: int=0,
-        num_doors: int=4,
+        num_colors: int=4,
         max_steps: int | None = None,
         **kwargs,
     ):  
         self.agent_goal = agent_goal
-        self.num_doors = num_doors
+        self.num_doors = num_colors
         self.agent_start_pos = agent_start_pos
         self.agent_start_dir = agent_start_dir
         self.agent_view_size = agent_view_size
@@ -63,8 +63,6 @@ class MultiGoalsEnv(MiniGridEnv):
         self.doors = []
         self.keys = []
         for ii in range(self.num_doors):
-
-            # print(f"Add door and key of color {IDX_TO_COLOR[ii+1]} (idx={ii})")
 
             # Create door and key at random position
             i_door, i_key = np.random.randint(1, self.width - 1, size=2)
