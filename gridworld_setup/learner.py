@@ -1,9 +1,8 @@
 import numpy as np
 from queue import SimpleQueue
 from minigrid.core.actions import Actions
-from minigrid.core.constants import IDX_TO_COLOR, DIR_TO_VEC
+from minigrid.core.constants import DIR_TO_VEC
 from PIL import Image
-import pickle
 
 from environment import MultiGoalsEnv
 from utils import *
@@ -64,6 +63,7 @@ class BayesianLearner:
         self.transitions = SimpleQueue()
 
         self.reward = 0
+        self.terminated = False
         self.going_to_subgoal = False
         self.going_to_goal = False
 
@@ -85,17 +85,21 @@ class BayesianLearner:
                                  num_colors=num_colors,
                                  max_steps=self.max_steps)
     
-    def play(self, size: int=None) -> None:
+    def play(self, size: int=None) -> list:
         
         if size is None:
             size = self.max_steps
 
+        actions = []
         for _ in range(size):
             a = self.policy()
+            actions.append(a)
+            
             action = Actions(a)
             obs, reward, terminated, _, _ = self.env.step(action)
             self.update_beliefs(obs['image'])
             self.reward = reward
+            self.terminated = terminated
 
             # Save for rendering
             self.render_frames.append(self.env.render())
@@ -116,6 +120,8 @@ class BayesianLearner:
             gif_file = f"./outputs_rendering/output_belief.gif"
             pil_images = [Image.fromarray(image / (Shannon_entropy( 1 / 4 * np.ones(4)) + 0.5) * 255) for image in self.render_beliefs]
             pil_images[0].save(gif_file, save_all=True, append_images=pil_images[1:], duration=100, loop=0)
+
+        return actions
 
 
     def update_beliefs(self, obs: np.ndarray) -> None:
@@ -146,25 +152,15 @@ class BayesianLearner:
 
                 # Goal (door)
                 if (obs[vis_i, vis_j, :2] == np.array([4, self.goal_color])).all() and (self.env.agent_pos != (abs_i, abs_j)):
-                    # # Projection
-                    # self.beliefs[:, :, 2] = np.zeros_like(self.beliefs[:, :,2])
-                    # self.beliefs /= self.beliefs.sum(axis=2).reshape(self.env.height, self.env.width, -1)
-                    # Only one door
                     self.beliefs[abs_i, abs_j, :] = np.array([0, 0, 1, 0])
                 # Subgoal (key)
                 elif (obs[vis_i, vis_j, :2] == np.array([5, self.goal_color])).all() and (self.env.agent_pos != (abs_i, abs_j)):
-                    # # Projection
-                    # self.beliefs[:, :, 3] = np.zeros_like(self.beliefs[:, :, 3])
-                    # self.beliefs /= self.beliefs.sum(axis=2).reshape(self.env.height, self.env.width, -1)
-                    # Only one key
                     self.beliefs[abs_i, abs_j, :] = np.array([0, 0, 0, 1])
                 # Obstacle
                 elif obs[vis_i, vis_j, 0] in [2, 4, 5] and (self.env.agent_pos != (abs_i, abs_j)):
                     self.beliefs[abs_i, abs_j, :] = np.array([0, 1, 0, 0])
                 # Nothing
                 else:
-                    if (obs[vis_i, vis_j, :2] == np.array([5, self.goal_color])).all() and (self.env.agent_pos == (abs_i, abs_j)):
-                        self.reached_subgoal = True
                     self.beliefs[abs_i, abs_j, :] = np.array([1, 0, 0, 0])
     
     def compute_exploration_score(self, dir: int, pos: tuple) -> float:
@@ -340,6 +336,7 @@ class BayesianLearner:
         # Subgoal (key) in front of the agent
         if self.obj_in_front(obj_idx=3):
 
+            self.reached_subgoal = True
             self.going_to_subgoal = False
             # Subgoal (key) reached --> empty queues
             while not self.transitions.empty():
@@ -361,8 +358,8 @@ class BayesianLearner:
             # Open the goal (door)
             return 5
 
-        # If know where is the subgoal (key) & not already going to the subgoal (key) --> go to the subgoal (key)
-        if (self.beliefs[:, :, 3] == 1).any() and not self.going_to_subgoal:
+        # If know where is the subgoal (key) & not already have subgoal (key) & not already going to the subgoal (key) --> go to the subgoal (key)
+        if (self.beliefs[:, :, 3] == 1).any() and not self.reached_subgoal and not self.going_to_subgoal:
 
             subgoal_pos = np.where(self.beliefs[:, :, 3] == 1)
             # Obstacle grid
@@ -385,7 +382,7 @@ class BayesianLearner:
                 # Return action
                 return self.policy()
 
-        # If know where is the goal (door) & has key & not already going to the goal (door) --> go to the goal (door)
+        # If know where is the goal (door) & has subgoal (key) & not already going to the goal (door) --> go to the goal (door)
         elif (self.beliefs[:, :, 2] == 1).any() and self.reached_subgoal and not self.going_to_goal:
 
             goal_pos = np.where(self.beliefs[:, :, 2] == 1)
