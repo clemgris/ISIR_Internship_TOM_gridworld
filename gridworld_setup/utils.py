@@ -1,5 +1,8 @@
 import numpy as np
+import matplotlib.pyplot as plt
+
 from queue import PriorityQueue
+import heapq
 
 def Shannon_entropy(proba_dist: np.array, axis: int=None) -> float | np.ndarray:
     # Compute the Shannon Entropy 
@@ -70,3 +73,85 @@ def A_star_algorithm(start: tuple, goal: tuple, grid: np.ndarray) -> list | None
 
     # If the goal is not reachable
     return None
+
+def Dijkstra(grid: np.ndarray, g_x: int, g_y: int) -> np.ndarray:
+    rows, cols = grid.shape
+
+    distance = np.full_like(grid, np.inf)
+    distance[g_x, g_y] = 0
+
+    heap = [(0, g_x, g_y)]
+
+    while heap:
+        dist, x, y = heapq.heappop(heap)
+
+        if dist > distance[x, y]:
+            continue
+
+        # Check neighbors
+        for dx, dy in [(1, 0), (-1, 0), (0, 1), (0, -1)]:
+            nx, ny = x + dx, y + dy
+
+            if 0 <= nx < rows and 0 <= ny < cols and grid[nx, ny] != 1:
+                cost = dist + 1  # Assuming each cell has a cost of 1
+                if cost < distance[nx, ny]:
+                    distance[nx, ny] = cost
+                    heapq.heappush(heap, (cost, nx, ny))
+
+    return distance
+
+##
+# Visualization
+##
+
+def plot_grid(start, num, size, alpha=0.5):
+    idx = np.linspace(start, size, num)
+    for x in idx:
+        plt.plot([x, x], [start, size], alpha=alpha, c='gray')
+        plt.plot([start, size], [x, x], alpha=alpha, c='gray')
+
+def plot_agent(pos: tuple, dir: int) -> None:
+    if dir == 0:
+        marker = ">"
+    elif dir == 1:
+        marker = "v"
+    elif dir == 2:
+        marker = "<"
+    elif dir == 3:
+        marker = "^"
+    plt.scatter(pos[0], pos[1], marker=marker, c='r', s=120)
+
+def plot_error_episode_length(colors: np.ndarray, rf_values: list, num_colors: int, dict: dict) -> None:
+    labels = np.concatenate((np.array(rf_values)[:-1], np.array(['full obs'])))
+    for rf_idx, receptive_field in reversed(list(enumerate(rf_values))):
+        all_length = []
+        all_accuracy = []
+        for goal_color in range(num_colors):
+            all_length += dict[receptive_field][goal_color]['length']
+            all_accuracy += dict[receptive_field][goal_color]['accuracy']['rf']
+
+        bins = np.arange(0, (np.max(all_length) // 20 + 1) * 20 + 1, 20)
+
+        mean_accuracy = []
+        std_accuracy = []
+        n = []
+        for i in range(len(bins) - 1):
+            lower_bound = bins[i]
+            upper_bound = bins[i + 1]
+            filtered_accuracy = [acc for dist, acc in zip(all_length, all_accuracy) if lower_bound <= dist <= upper_bound]
+            mean_accuracy.append(np.mean(filtered_accuracy))
+            std_accuracy.append(np.std(filtered_accuracy))
+            n.append(len(filtered_accuracy))
+
+        
+        plt.bar(range(len(bins) - 1), mean_accuracy, yerr=1.96 * np.array(std_accuracy) / np.array(n),
+                color=colors[rf_idx], label=f'rf={labels[rf_idx]}')
+
+        plt.xlabel('Length of the observed episode')
+        plt.ylabel('Mean Accuracy (MAP)')
+        plt.title('Mean accuracy (MAP) per episode length')
+
+        plt.xticks(range(len(bins) - 1), [f'[{bins[i]},{bins[i + 1]}]' for i in range(len(bins) - 1)])
+
+    plt.plot([-0.5, len(bins) - 1.5], [1, 1], label='Max', ls='--', c='k')
+    plt.legend()
