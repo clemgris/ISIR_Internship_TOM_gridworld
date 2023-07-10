@@ -8,7 +8,7 @@ from environment import MultiGoalsEnv
 from utils import *
 
 ##
-# Learner that plans single position transitions
+# Learner that plans single position transition (action planning)
 ##
 
 class BayesianLearner:
@@ -393,7 +393,7 @@ class BayesianLearner:
             # Check if new info
             compute_shortest_path = False
             if np.any(grid != self.obstacle_grid):
-                self.obstacle_grid = grid
+                self.obstacle_grid = grid.copy()
                 compute_shortest_path = True
             grid[subgoal_pos[0], subgoal_pos[1]] = 0
 
@@ -433,7 +433,7 @@ class BayesianLearner:
             compute_shortest_path = False
             if np.any(grid != self.obstacle_grid):
                 self.LOG.append('New info (for goal)')
-                self.obstacle_grid = grid
+                self.obstacle_grid = grid.copy()
                 compute_shortest_path = True
             grid[goal_pos[0], goal_pos[1]] = 0
 
@@ -468,8 +468,9 @@ class BayesianLearner:
         return self.active_exploration_policy()
     
 ##
-# Learner that plans multiple position transitions
+# Learner that plans multiple position transitions (sequence planning)
 ##
+
 class BayesianLearnerPlanning:
 
     def __init__(self,
