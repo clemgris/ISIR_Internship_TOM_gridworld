@@ -46,6 +46,7 @@ class BayesianLearner:
             subgoal_pos = self.env.obj_idx[2 * self.goal_color]
             grid[subgoal_pos[0], subgoal_pos[1]] = 0
             path_subgoal = A_star_algorithm(start=self.env.agent_pos, goal=subgoal_pos, grid=grid)
+            grid[subgoal_pos[0], subgoal_pos[1]] = 1
 
             goal_pos = self.env.obj_idx[2 * self.goal_color - 1]
             grid[goal_pos[0], goal_pos[1]] = 0
@@ -254,63 +255,9 @@ class BayesianLearner:
 
     def add_actions(self, pos_dest: tuple) -> None:
         # Mapping position transition --> actions
-        dx = self.env.agent_pos[0] - pos_dest[0]
-        dy = self.env.agent_pos[1] - pos_dest[1]
-        if dx < 0:
-            if self.env.agent_dir == 0:
-                self.actions.put(2)
-            elif self.env.agent_dir == 1:
-                self.actions.put(0)
-                self.actions.put(2)
-            elif self.env.agent_dir == 2:
-                self.actions.put(1)
-                self.actions.put(1)
-                self.actions.put(2)
-            elif self.env.agent_dir == 3:
-                self.actions.put(1)
-                self.actions.put(2)
-
-        if dx > 0:
-            if self.env.agent_dir == 0:
-                self.actions.put(1)
-                self.actions.put(1)
-                self.actions.put(2)
-            elif self.env.agent_dir == 1:
-                self.actions.put(1)
-                self.actions.put(2)
-            elif self.env.agent_dir == 2:
-                self.actions.put(2)
-            elif self.env.agent_dir == 3:
-                self.actions.put(0)
-                self.actions.put(2)
-
-        if dy < 0:
-            if self.env.agent_dir == 0:
-                self.actions.put(1)
-                self.actions.put(2)
-            elif self.env.agent_dir == 1:
-                self.actions.put(2)
-            elif self.env.agent_dir == 2:
-                self.actions.put(0)
-                self.actions.put(2)
-            elif self.env.agent_dir == 3:
-                self.actions.put(1)
-                self.actions.put(1)
-                self.actions.put(2)
-
-        if dy > 0:
-            if self.env.agent_dir == 0:
-                self.actions.put(0)
-                self.actions.put(2)
-            elif self.env.agent_dir == 1:
-                self.actions.put(1)
-                self.actions.put(1)
-                self.actions.put(2)
-            elif self.env.agent_dir == 2:
-                self.actions.put(1)
-                self.actions.put(2)
-            elif self.env.agent_dir == 3:
-                self.actions.put(2)
+        actions = map_actions(self.env.agent_pos, pos_dest, self.env.agent_dir)
+        for a in actions:
+            self.actions.put(a)
 
     def obj_in_front(self, obj_idx: int) -> bool:
 
@@ -467,6 +414,35 @@ class BayesianLearner:
         # Action that maximizes the exploration
         return self.active_exploration_policy()
     
+    def observe(self, traj: list) -> None:
+        if len(traj) > 0:
+            # Add first unused action to get the first observation
+            demo = [4] + traj
+        else:
+            demo = traj
+
+        # Assert knows nothing on env
+        assert((self.env.agent_pos == self.env.agent_start_pos) & (self.env.agent_dir == self.env.agent_start_dir))
+        assert(np.all(self.beliefs == 1 / 4))
+
+        # For rendering
+        self.render_frames_observation = []
+        self.render_beliefs_observation = []
+        self.pos = []
+        # Follow traj and update beliefs
+        for a in demo:
+            action = Actions(a)
+            obs, _, _, _, _ = self.env.step(action)
+            self.update_beliefs(obs['image'])
+
+            # For rendering
+            self.render_frames_observation.append(self.env.render())
+            beliefs_image = Shannon_entropy(self.beliefs, axis=2) / (Shannon_entropy( 1 / 4 * np.ones(4)) + 0.2)
+            self.render_beliefs_observation.append(beliefs_image.T)
+            self.pos.append(self.env.agent_pos)
+
+        # Reset learner init pos
+        self.env.reset_agent_pos()
 ##
 # Learner that plans multiple position transitions (sequence planning)
 ##
@@ -712,64 +688,10 @@ class BayesianLearnerPlanning:
 
     def add_actions(self, pos_dest: tuple) -> None:
         # Mapping position transition --> actions
-        dx = self.env.agent_pos[0] - pos_dest[0]
-        dy = self.env.agent_pos[1] - pos_dest[1]
-        if dx < 0:
-            if self.env.agent_dir == 0:
-                self.actions.put(2)
-            elif self.env.agent_dir == 1:
-                self.actions.put(0)
-                self.actions.put(2)
-            elif self.env.agent_dir == 2:
-                self.actions.put(1)
-                self.actions.put(1)
-                self.actions.put(2)
-            elif self.env.agent_dir == 3:
-                self.actions.put(1)
-                self.actions.put(2)
-
-        if dx > 0:
-            if self.env.agent_dir == 0:
-                self.actions.put(1)
-                self.actions.put(1)
-                self.actions.put(2)
-            elif self.env.agent_dir == 1:
-                self.actions.put(1)
-                self.actions.put(2)
-            elif self.env.agent_dir == 2:
-                self.actions.put(2)
-            elif self.env.agent_dir == 3:
-                self.actions.put(0)
-                self.actions.put(2)
-
-        if dy < 0:
-            if self.env.agent_dir == 0:
-                self.actions.put(1)
-                self.actions.put(2)
-            elif self.env.agent_dir == 1:
-                self.actions.put(2)
-            elif self.env.agent_dir == 2:
-                self.actions.put(0)
-                self.actions.put(2)
-            elif self.env.agent_dir == 3:
-                self.actions.put(1)
-                self.actions.put(1)
-                self.actions.put(2)
-
-        if dy > 0:
-            if self.env.agent_dir == 0:
-                self.actions.put(0)
-                self.actions.put(2)
-            elif self.env.agent_dir == 1:
-                self.actions.put(1)
-                self.actions.put(1)
-                self.actions.put(2)
-            elif self.env.agent_dir == 2:
-                self.actions.put(1)
-                self.actions.put(2)
-            elif self.env.agent_dir == 3:
-                self.actions.put(2)
-
+        actions = map_actions(self.env.agent_pos, pos_dest, self.env.agent_dir)
+        for a in actions:
+            self.actions.append(a)
+    
     def obj_in_front(self, obj_idx: int) -> bool:
 
         dx, dy = 0, 0
