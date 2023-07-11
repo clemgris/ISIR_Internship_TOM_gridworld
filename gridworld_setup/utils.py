@@ -100,6 +100,98 @@ def Dijkstra(grid: np.ndarray, g_x: int, g_y: int) -> np.ndarray:
 
     return distance
 
+def map_actions(learner_pos: tuple, pos_dest: tuple, learner_dir: int) -> list:
+    # Mapping position transition --> actions
+    dx = learner_pos[0] - pos_dest[0]
+    dy = learner_pos[1] - pos_dest[1]
+    actions = []
+    if dx < 0:
+        if learner_dir == 0:
+            actions.append(2)
+        elif learner_dir == 1:
+            actions.append(0)
+            actions.append(2)
+        elif learner_dir == 2:
+            actions.append(1)
+            actions.append(1)
+            actions.append(2)
+        elif learner_dir == 3:
+            actions.append(1)
+            actions.append(2)
+
+    if dx > 0:
+        if learner_dir == 0:
+            actions.append(1)
+            actions.append(1)
+            actions.append(2)
+        elif learner_dir == 1:
+            actions.append(1)
+            actions.append(2)
+        elif learner_dir == 2:
+            actions.append(2)
+        elif learner_dir == 3:
+            actions.append(0)
+            actions.append(2)
+
+    if dy < 0:
+        if learner_dir == 0:
+            actions.append(1)
+            actions.append(2)
+        elif learner_dir == 1:
+            actions.append(2)
+        elif learner_dir == 2:
+            actions.append(0)
+            actions.append(2)
+        elif learner_dir == 3:
+            actions.append(1)
+            actions.append(1)
+            actions.append(2)
+
+    if dy > 0:
+        if learner_dir == 0:
+            actions.append(0)
+            actions.append(2)
+        elif learner_dir == 1:
+            actions.append(1)
+            actions.append(1)
+            actions.append(2)
+        elif learner_dir == 2:
+            actions.append(1)
+            actions.append(2)
+        elif learner_dir == 3:
+            actions.append(2)
+
+    return actions
+
+def get_view(agent_pos: tuple, agent_dir: int, receptive_field: int) -> tuple:
+    # Facing right
+    if agent_dir == 0:
+        topX = agent_pos[0]
+        topY = agent_pos[1] - receptive_field // 2
+    # Facing down
+    elif agent_dir == 1:
+        topX = agent_pos[0] - receptive_field // 2
+        topY = agent_pos[1]
+    # Facing left
+    elif agent_dir == 2:
+        topX = agent_pos[0] - receptive_field + 1
+        topY = agent_pos[1] - receptive_field // 2
+    # Facing up
+    elif agent_dir == 3:
+        topX = agent_pos[0] - receptive_field // 2
+        topY = agent_pos[1] - receptive_field + 1
+    else:
+        assert False, "invalid agent direction"
+
+    botX = topX + receptive_field
+    botY = topY + receptive_field
+
+    return (topX, topY, botX, botY)
+
+def obj_in_view(agent_pos: tuple, agent_dir: int, receptive_field: int, obj_pos: tuple) -> bool:
+    topX, topY, botX, botY = get_view(agent_pos, agent_dir, receptive_field)
+    return (topX <= obj_pos[0] < botX) & (topY <= obj_pos[1] < botY)
+
 ##
 # Visualization
 ##
@@ -110,7 +202,7 @@ def plot_grid(start, num, size, alpha=0.5):
         plt.plot([x, x], [start, size], alpha=alpha, c='gray')
         plt.plot([start, size], [x, x], alpha=alpha, c='gray')
 
-def plot_agent(pos: tuple, dir: int) -> None:
+def plot_agent_play(pos: tuple, dir: int) -> None:
     if dir == 0:
         marker = ">"
     elif dir == 1:
@@ -120,6 +212,13 @@ def plot_agent(pos: tuple, dir: int) -> None:
     elif dir == 3:
         marker = "^"
     plt.scatter(pos[0], pos[1], marker=marker, c='r', s=120)
+
+def plot_agent_obs(pos: tuple, GRID_SIZE: int, img: np.ndarray, hide: bool=False) -> None:
+    ratio = img.shape[0] / GRID_SIZE
+    im_agent_pos =np.array([(pos[0] + 0.5) * ratio, (pos[1] + 0.5) * ratio]).astype('int')
+    if hide:
+        plt.scatter(im_agent_pos[0], im_agent_pos[1], color=rgb_to_hex((76, 76, 76)), marker='s', s=140)
+    plt.scatter(im_agent_pos[0], im_agent_pos[1], c='w', marker='*', s=120)
 
 def plot_error_episode_length(colors: np.ndarray, rf_values: list, num_colors: int, dict: dict) -> None:
     labels = np.concatenate((np.array(rf_values)[:-1], np.array(['full obs'])))
@@ -155,3 +254,9 @@ def plot_error_episode_length(colors: np.ndarray, rf_values: list, num_colors: i
 
     plt.plot([-0.5, len(bins) - 1.5], [1, 1], label='Max', ls='--', c='k')
     plt.legend()
+
+def rgb_to_hex(rgb):
+    r, g, b = [max(0, min(255, int(channel))) for channel in rgb]
+    # Convert RGB to hexadecimal color code (i.e. map to color type in python)
+    hex_code = '#{:02x}{:02x}{:02x}'.format(r, g, b)
+    return hex_code
