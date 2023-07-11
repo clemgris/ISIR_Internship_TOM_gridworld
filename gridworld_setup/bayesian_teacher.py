@@ -46,22 +46,7 @@ class BayesianTeacher:
 
     def compute_learner_obs(self, receptive_field: int) -> np.ndarray:
         
-        # Facing right
-        if self.learner_dir == 0:
-            topX = self.learner_pos[0]
-            topY = self.learner_pos[1] - receptive_field // 2
-        # Facing down
-        elif self.learner_dir == 1:
-            topX = self.learner_pos[0] - receptive_field // 2
-            topY = self.learner_pos[1]
-        # Facing left
-        elif self.learner_dir == 2:
-            topX = self.learner_pos[0] - receptive_field + 1
-            topY = self.learner_pos[1] - receptive_field // 2
-        # Facing up
-        elif self.learner_dir == 3:
-            topX = self.learner_pos[0] - receptive_field // 2
-            topY = self.learner_pos[1] - receptive_field + 1
+        topX, topY, _, _ = get_view(self.learner_pos, self.learner_dir, receptive_field)
         
         grid = self.env.grid.slice(topX, topY, receptive_field, receptive_field)
         for _ in range(self.learner_dir + 1):
@@ -551,64 +536,9 @@ class BayesianTeacherA_star:
             
 
     def add_actions(self, learner_pos: tuple, pos_dest: tuple, learner_dir: int, goal_color: int, rf_idx: int) -> None:
-        # Mapping position transition --> actions
-        dx = learner_pos[0] - pos_dest[0]
-        dy = learner_pos[1] - pos_dest[1]
-        if dx < 0:
-            if learner_dir == 0:
-                self.learner_queue_actions[goal_color, rf_idx].put(2)
-            elif learner_dir == 1:
-                self.learner_queue_actions[goal_color, rf_idx].put(0)
-                self.learner_queue_actions[goal_color, rf_idx].put(2)
-            elif learner_dir == 2:
-                self.learner_queue_actions[goal_color, rf_idx].put(1)
-                self.learner_queue_actions[goal_color, rf_idx].put(1)
-                self.learner_queue_actions[goal_color, rf_idx].put(2)
-            elif learner_dir == 3:
-                self.learner_queue_actions[goal_color, rf_idx].put(1)
-                self.learner_queue_actions[goal_color, rf_idx].put(2)
-
-        if dx > 0:
-            if learner_dir == 0:
-                self.learner_queue_actions[goal_color, rf_idx].put(1)
-                self.learner_queue_actions[goal_color, rf_idx].put(1)
-                self.learner_queue_actions[goal_color, rf_idx].put(2)
-            elif learner_dir == 1:
-                self.learner_queue_actions[goal_color, rf_idx].put(1)
-                self.learner_queue_actions[goal_color, rf_idx].put(2)
-            elif learner_dir == 2:
-                self.learner_queue_actions[goal_color, rf_idx].put(2)
-            elif learner_dir == 3:
-                self.learner_queue_actions[goal_color, rf_idx].put(0)
-                self.learner_queue_actions[goal_color, rf_idx].put(2)
-
-        if dy < 0:
-            if learner_dir == 0:
-                self.learner_queue_actions[goal_color, rf_idx].put(1)
-                self.learner_queue_actions[goal_color, rf_idx].put(2)
-            elif learner_dir == 1:
-                self.learner_queue_actions[goal_color, rf_idx].put(2)
-            elif learner_dir == 2:
-                self.learner_queue_actions[goal_color, rf_idx].put(0)
-                self.learner_queue_actions[goal_color, rf_idx].put(2)
-            elif learner_dir == 3:
-                self.learner_queue_actions[goal_color, rf_idx].put(1)
-                self.learner_queue_actions[goal_color, rf_idx].put(1)
-                self.learner_queue_actions[goal_color, rf_idx].put(2)
-
-        if dy > 0:
-            if learner_dir == 0:
-                self.learner_queue_actions[goal_color, rf_idx].put(0)
-                self.learner_queue_actions[goal_color, rf_idx].put(2)
-            elif learner_dir == 1:
-                self.learner_queue_actions[goal_color, rf_idx].put(1)
-                self.learner_queue_actions[goal_color, rf_idx].put(1)
-                self.learner_queue_actions[goal_color, rf_idx].put(2)
-            elif learner_dir == 2:
-                self.learner_queue_actions[goal_color, rf_idx].put(1)
-                self.learner_queue_actions[goal_color, rf_idx].put(2)
-            elif learner_dir == 3:
-                self.learner_queue_actions[goal_color, rf_idx].put(2)
+        actions = map_actions(learner_pos, pos_dest, learner_dir)
+        for a in actions:
+            self.learner_queue_actions[goal_color, rf_idx].put(a)
 
     def obj_in_front(self, learner_pos: tuple, learner_dir: int, obj_idx: int) -> bool:
 
