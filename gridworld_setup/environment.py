@@ -8,6 +8,7 @@ from minigrid.core.world_object import Door, Key, Wall
 from minigrid.minigrid_env import MiniGridEnv
 
 import numpy as np
+import math
 
 class MultiGoalsEnv(MiniGridEnv):
     def __init__(
@@ -94,6 +95,10 @@ class MultiGoalsEnv(MiniGridEnv):
             self.place_agent()
 
         self.mission = "Open the door with the right color"
+
+    def reset_agent_pos(self):
+        self.agent_pos = self.agent_start_pos
+        self.agent_dir = self.agent_start_dir
 
 
     def step(self, action: Actions):
