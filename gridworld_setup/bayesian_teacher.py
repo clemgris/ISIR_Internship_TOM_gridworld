@@ -20,7 +20,6 @@ class BayesianTeacher:
                  lambd: float=0.5
                  ) -> None:
         
-        self.env = env
         self.Na = Na
 
         # Boltzmann temperature parameter (confidence in greedy)
@@ -29,10 +28,18 @@ class BayesianTeacher:
         self.num_colors = num_colors
         self.num_rf = len(rf_values)
         self.rf_values = rf_values
-        self.gridsize = self.env.height
-
+        
+        # Init beliefs on the type of learner
         self.beliefs = 1. / ( num_colors * len(rf_values)) * np.ones((num_colors, len(rf_values)))
-        self.learner_beliefs = 1. / (2 + 2 * num_colors) * np.ones((len(rf_values), self.gridsize, self.gridsize, 2 + 2 * num_colors))
+        # Init env and learner beliefs about the env
+        self.init_env(env)
+
+        self.LOG = []
+
+    def init_env(self, env: MultiGoalsEnv) -> None:
+        self.env = env
+        self.gridsize = self.env.height
+        self.learner_beliefs = 1. / (2 + 2 * self.num_colors) * np.ones((len(self.rf_values), self.gridsize, self.gridsize, 2 + 2 * self.num_colors))
 
         self.learner_going_to_subgoal = np.zeros((self.num_colors, self.num_rf), dtype=bool)
         self.learner_going_to_goal = np.zeros((self.num_colors, self.num_rf), dtype=bool)
@@ -41,8 +48,6 @@ class BayesianTeacher:
 
         self.distance_subgoal = np.zeros((self.num_rf, self.num_colors, self.gridsize, self.gridsize))
         self.distance_goal = np.zeros((self.num_rf, self.num_colors, self.gridsize, self.gridsize))
-
-        self.LOG = []
 
     def compute_learner_obs(self, receptive_field: int) -> np.ndarray:
         
@@ -318,10 +323,10 @@ class BayesianTeacher:
 
 
 ##
-# Bayesian teacher that knows rational learner & learner is using A* algo to compute the shortest path
+# Bayesian teacher that knows learner is using A* algo to compute the shortest path & active exploration
 ##
 
-class BayesianTeacherA_star:
+class AlignedBayesianTeacher:
 
     def __init__(self,
                  env: MultiGoalsEnv,
@@ -331,68 +336,67 @@ class BayesianTeacherA_star:
                  ) -> None:
         
         self.env = env
-        self.Na = 6
+        self.Na = Na
 
         self.num_colors = num_colors
         self.num_rf = len(rf_values)
+        self.rf_values = rf_values
         self.gridsize = self.env.height
 
-        self.rf_values = rf_values
-        
         self.beliefs = 1. / ( num_colors * len(rf_values)) * np.ones((num_colors, len(rf_values)))
         self.learner_beliefs = 1. / (2 + 2 * num_colors) * np.ones((len(rf_values), self.gridsize, self.gridsize, 2 + 2 * num_colors))
 
         self.learner_queue_actions = {}
         self.learner_queue_transitions = {}
+        self.learner_shortest_path_subgoal = {}
+        self.learner_shortest_path_goal = {}
         for goal_color in range(num_colors):
-            for rf in rf_values:
-                self.learner_queue_actions[goal_color] = {}
-                self.learner_queue_transitions[goal_color] = {}
+            self.learner_queue_actions[goal_color] = {}
+            self.learner_queue_transitions[goal_color] = {}
+            self.learner_shortest_path_subgoal[goal_color] = {}
+            self.learner_shortest_path_goal[goal_color] = {}
+            for rf in self.rf_values:
                 self.learner_queue_actions[goal_color][rf] = SimpleQueue()
                 self.learner_queue_transitions[goal_color][rf] = SimpleQueue()
+                self.learner_shortest_path_subgoal[goal_color][rf] = None
+                self.learner_shortest_path_goal[goal_color][rf] = None
+
+        self.learner_obstacle_grid = np.ones((self.num_colors, self.num_rf, self.env.height, self.env.width))
 
         self.learner_going_to_subgoal = np.zeros((self.num_colors, self.num_rf), dtype=bool)
         self.learner_going_to_goal = np.zeros((self.num_colors, self.num_rf), dtype=bool)
-        self.learner_reached_subgoal = np.zeros((self.num_colors, self.num_rf), dtype=bool)
-
-    def compute_learner_obs(self, learner_pos: tuple, learner_dir: int, receptive_field: int) -> np.ndarray:
         
-        # Facing right
-        if learner_dir == 0:
-            topX = learner_pos[0]
-            topY = learner_pos[1] - receptive_field // 2
-        # Facing down
-        elif learner_dir == 1:
-            topX = learner_pos[0] - receptive_field // 2
-            topY = learner_pos[1]
-        # Facing left
-        elif learner_dir == 2:
-            topX = learner_pos[0] - receptive_field + 1
-            topY = learner_pos[1] - receptive_field // 2
-        # Facing up
-        elif learner_dir == 3:
-            topX = learner_pos[0] - receptive_field // 2
-            topY = learner_pos[1] - receptive_field + 1
+        self.learner_reached_subgoal = np.zeros((self.num_colors, self.num_rf), dtype=bool)
+        
+        self.learner_step_count = -1
 
+        self.LOG = []
+
+    def compute_learner_obs(self, receptive_field: int) -> np.ndarray:
+        
+        topX, topY, _, _ = get_view(self.learner_pos, self.learner_dir, receptive_field)
+        
         grid = self.env.grid.slice(topX, topY, receptive_field, receptive_field)
+        for i in range(self.learner_dir + 1):
+            grid = grid.rotate_left()
         vis_mask = np.ones(shape=(grid.width, grid.height), dtype=bool)
 
         obs = grid.encode(vis_mask)
 
         return obs
 
-    def update_learner_belief(self, learner_pos: tuple, learner_dir: int, rf_idx: int) -> None:
+    def update_learner_belief(self, rf_idx: int) -> None:
         
         receptive_field = self.rf_values[rf_idx]
 
-        obs = self.compute_learner_obs(learner_pos, learner_dir, receptive_field)
+        obs = self.compute_learner_obs(receptive_field)
 
-        f_vec = DIR_TO_VEC[learner_dir]
-        dir_vec = DIR_TO_VEC[learner_dir]
+        f_vec = DIR_TO_VEC[self.learner_dir]
+        dir_vec = DIR_TO_VEC[self.learner_dir]
         dx, dy = dir_vec
         r_vec =  np.array((-dy, dx))
         top_left = (
-            learner_pos
+            self.learner_pos
             + f_vec * (receptive_field - 1)
             - r_vec * (receptive_field // 2)
         )
@@ -407,16 +411,18 @@ class BayesianTeacherA_star:
                     continue
                 if abs_j < 0 or abs_j >= self.gridsize:
                     continue
-                if learner_pos == (abs_i, abs_j):
-                    continue
 
                 one_hot = np.zeros(2 + 2 * self.num_colors)
+                color_idx = obs[vis_i, vis_j, 1]
+
+                if self.learner_pos == (abs_i, abs_j):
+                    one_hot[0] = 1
                 # Goal
-                if obs[vis_i, vis_j, 0] == 4:
-                    one_hot[2 + (obs[vis_i, vis_j, 1] - 1) * 2] = 1
+                elif obs[vis_i, vis_j, 0] == 4:
+                    one_hot[2 + (color_idx - 1) * 2] = 1
                 # Subgoal (key)
                 elif obs[vis_i, vis_j, 0] == 5:
-                    one_hot[2 + (obs[vis_i, vis_j, 1] - 1) * 2 + 1] = 1
+                    one_hot[2 + (color_idx - 1) * 2 + 1] = 1
                 # Wall
                 elif obs[vis_i, vis_j, 0] == 2:
                     one_hot[1] = 1
@@ -424,19 +430,20 @@ class BayesianTeacherA_star:
                 else:
                     one_hot[0] = 1
                 
+                # print('update', 'pos', abs_i, abs_j, 'beliefs', one_hot)
                 self.learner_beliefs[rf_idx, abs_i, abs_j, :] = one_hot
 
-    def compute_exploration_score(self, learner_dir: int, learner_pos: tuple, rf_idx: int) -> float:
+    def compute_exploration_score(self, dir: int, pos: tuple, rf_idx: int) -> float:
         
         receptive_field = self.rf_values[rf_idx]
         
-        f_vec = DIR_TO_VEC[learner_dir]
-        dir_vec = DIR_TO_VEC[learner_dir]
+        f_vec = DIR_TO_VEC[dir]
+        dir_vec = DIR_TO_VEC[dir]
         dx, dy = dir_vec
         r_vec =  np.array((-dy, dx))
 
         top_left = (
-            learner_pos
+            pos
             + f_vec * (receptive_field - 1)
             - r_vec * (receptive_field // 2)
         )
@@ -454,125 +461,84 @@ class BayesianTeacherA_star:
                 if abs_j < 0 or abs_j >= self.gridsize:
                     continue
 
-                exploration_score += Shannon_entropy(self.learner_beliefs[rf_idx, abs_i, abs_j, :])
+                if Shannon_entropy(self.learner_beliefs[rf_idx, abs_i, abs_j, :]) > 0:
+                    exploration_score += 1
             
         return exploration_score
     
-    def learner_best_exploration_action(self, learner_pos: tuple, learner_dir: int,
-                                rf_idx: int, goal_color: int,
-                                forced: bool=False) -> int:
-
-        receptive_field = self.rf_values[rf_idx]
-
+    def learner_best_exploration_action(self,goal_color: int, rf_idx: int) -> int:
+        eps = 0.5
         # Action that maximizes the exploration
         scores = np.zeros(3)
         # Turn left
-        scores[0] = self.compute_exploration_score(learner_dir=(learner_dir - 1) % 4, learner_pos=learner_pos, rf_idx=rf_idx)
+        scores[0] = self.compute_exploration_score((self.learner_dir - 1) % 4, self.learner_pos, rf_idx=rf_idx)
         # Turn right
-        scores[1] = self.compute_exploration_score(learner_dir=(learner_dir + 1) % 4, learner_pos=learner_pos, rf_idx=rf_idx)
+        scores[1] = self.compute_exploration_score((self.learner_dir + 1) % 4, self.learner_pos, rf_idx=rf_idx)
         # Move forward
-        next_pos = learner_pos + DIR_TO_VEC[learner_dir]
-        if np.all(self.beliefs[next_pos[0], next_pos[1], :] == np.array([0, 1, 0, 0])) or \
-            np.all(self.beliefs[next_pos[0], next_pos[1], :] == np.array([0, 0, 1, 0])): # Obstacle in front
+        next_pos = self.learner_pos + DIR_TO_VEC[self.learner_dir]
+        one_hot_empty = np.zeros(2 + self.num_colors * 2)
+        one_hot_empty[0] = 1
+        one_hot_subgoal = np.zeros(2 + self.num_colors * 2)
+        one_hot_subgoal [2 + 2 * goal_color + 1]
+
+        if not (np.all(self.learner_beliefs[rf_idx, next_pos[0], next_pos[1], :] == one_hot_empty) or \
+            np.all(self.learner_beliefs[rf_idx, next_pos[0], next_pos[1], :] == one_hot_subgoal)): # Obstacle in front
             scores[2] = 0.
         else:
-            scores[2] = self.compute_exploration_score(learner_dir=learner_dir, learner_pos=next_pos)
+            scores[2] = self.compute_exploration_score(self.learner_dir, next_pos, rf_idx=rf_idx)
 
         argmax_set = np.where(np.isclose(scores, np.max(scores)))[0]
-
-        # If actions better than the others
-        if len(argmax_set) < 3 or forced:
-            proba_dist = np.ones(self.Na)
-            proba_dist[argmax_set] = 1
-            proba_dist /= proba_dist.sum()
-
-            return proba_dist
         
-        # If all the actions are equal
-        else:
-
-            # Unexplored locations
-            unexplored_pos = np.where(Shannon_entropy(self.beliefs, axis=2) != 0)
-            # At least one unexplored position
-            if len(unexplored_pos[0]) > 0:
-                # Manhattan distance to the unexplored locations
-                dist = np.array([Manhattan_dist(learner_pos, pos) for pos in zip(unexplored_pos[0], unexplored_pos[1])])
-                # Closest unexplored locations
-                argmin_set = np.where(np.isclose(dist, np.min(dist)))[0]
-                dest_idx = np.random.choice(argmin_set)
-                dest_pos = (unexplored_pos[0][dest_idx], unexplored_pos[1][dest_idx])
-
-                # Obstacles grid
-                one_hot = np.zeros(2 + self.num_colors * 2)
-                one_hot[0] = 1
-                grid = np.ones((self.gridsize, self.gridsize)) - np.all(self.learner_beliefs[rf_idx, ...] == one_hot.reshape(1, 1, -1), axis=2)
-                grid[dest_pos[0], dest_pos[1]] = 0
-                
-                # If the intermediate exploratory goal is not reacheable change exploratory goal
-                while dist[dest_idx] < 10e5:
-
-                    path = A_star_algorithm(learner_pos, dest_pos, grid)
-
-                    if path is None:
-                        # Choose another exploratory goal
-                        dist[dest_idx] = 10e5
-                        argmin_set = np.where(np.isclose(dist, np.min(dist)))[0]
-                        dest_idx = np.random.choice(argmin_set)
-                        dest_pos = (unexplored_pos[0][dest_idx], unexplored_pos[1][dest_idx])
-
-                        # Obstacles grid
-                        one_hot = np.zeros(2 + self.num_colors * 2)
-                        one_hot[0] = 1
-                        grid = np.ones((self.gridsize, self.gridsize)) - np.all(self.learner_beliefs[rf_idx, ...] == one_hot.reshape(1, 1, -1), axis=2)
-                        grid[dest_pos[0], dest_pos[1]] = 0
-                    else:
-                        # Add transitions to go to exploratory goal
-                        for transition in path:
-                            self.learner_queue_transitions[goal_color, receptive_field].put(transition)
-
-                        return self.learner_policy()
-
-            return self.learner_best_exploration_action(forced=True)
+        eps = 0.5
+        proba_dist = np.zeros(self.Na)
+        proba_dist[np.array([0, 1, 2])] = eps
+        proba_dist[argmax_set] = 1
+        proba_dist /= proba_dist.sum()
+        
+        return proba_dist
             
 
-    def add_actions(self, learner_pos: tuple, pos_dest: tuple, learner_dir: int, goal_color: int, rf_idx: int) -> None:
-        actions = map_actions(learner_pos, pos_dest, learner_dir)
+    def add_actions(self, pos_dest: tuple, goal_color: int, rf_idx: int) -> None:
+        receptive_field = self.rf_values[rf_idx]
+        # Mapping position transition --> actions
+        actions = map_actions(self.learner_pos, pos_dest, self.learner_dir)
         for a in actions:
-            self.learner_queue_actions[goal_color, rf_idx].put(a)
+            self.learner_queue_actions[goal_color][receptive_field].put(a)
 
-    def obj_in_front(self, learner_pos: tuple, learner_dir: int, obj_idx: int) -> bool:
+    def obj_in_front(self, rf_idx: int, obj_idx: int) -> bool:
 
         dx, dy = 0, 0
-        if learner_dir == 0:
+        if self.learner_dir == 0:
             dx = 1
-        elif learner_dir == 2:
+        elif self.learner_dir == 2:
             dx = -1
-        elif learner_dir == 3:
+        elif self.learner_dir == 3:
             dy = -1
-        elif learner_dir == 1:
+        elif self.learner_dir == 1:
             dy = 1
 
-        return self.beliefs[learner_pos[0] + dx, learner_pos[1] + dy, obj_idx] == 1
+        return self.learner_beliefs[rf_idx, self.learner_pos[0] + dx, self.learner_pos[1] + dy, obj_idx] == 1
         
-    def learner_policy(self, learner_pos: tuple, learner_dir: int,
-                       rf_idx: int, goal_color: int,
-                       learner_step_count: int):
+    def learner_policy(self, goal_color: int, rf_idx: int):
 
         receptive_field = self.rf_values[rf_idx]
             
-        if learner_step_count == 0:
+        if self.learner_step_count == 0:
+            if goal_color == 0:
+                self.LOG.append('First action')
             proba_dist = np.zeros(self.Na)
             proba_dist[4] = 1 # unused (to get first observation)
             return proba_dist
 
         # Subgoal (key) in front of the learner
-        if self.obj_in_front(obj_idx=3):
-
+        if self.obj_in_front(rf_idx, obj_idx=2 + (goal_color * 2) + 1):
+            if goal_color == 0:
+                self.LOG.append(f' rf={receptive_field} SUBGOAL in front')
             self.learner_reached_subgoal[goal_color, rf_idx] = True
             self.learner_going_to_subgoal[goal_color, rf_idx] = False
             # Subgoal (key) reached --> empty queues
-            while not self.learner_queue_transitions[goal_color, receptive_field].empty():
-                _ = self.learner_queue_transitions[goal_color, receptive_field].get()
+            while not self.learner_queue_transitions[goal_color][receptive_field].empty():
+                _ = self.learner_queue_transitions[goal_color][receptive_field].get()
             while not self.learner_queue_actions[goal_color][receptive_field].empty():
                 _ = self.learner_queue_actions[goal_color][receptive_field].get()
             proba_dist = np.zeros(self.Na)
@@ -580,108 +546,160 @@ class BayesianTeacherA_star:
             return proba_dist
         
         # Goal (door) in front of the learner
-        if self.obj_in_front(obj_idx=2) and self.learner_reached_subgoal[goal_color, rf_idx]:
-
+        if self.obj_in_front(rf_idx, obj_idx= 2 + (2 * goal_color)) and self.learner_reached_subgoal[goal_color, rf_idx]:
+            if goal_color == 0:
+                self.LOG.append(f' rf={receptive_field} GOAL in front')
             self.learner_going_to_goal[goal_color, rf_idx] = False
             # Goal (door) reached --> empty queues
-            while not self.learner_queue_transitions[goal_color, receptive_field].empty():
-                _ = self.learner_queue_transitions[goal_color, receptive_field].get()
+            while not self.learner_queue_transitions[goal_color][receptive_field].empty():
+                _ = self.learner_queue_transitions[goal_color][receptive_field].get()
             while not self.learner_queue_actions[goal_color][receptive_field].empty():
                 _ = self.learner_queue_actions[goal_color][receptive_field].get()
             proba_dist = np.zeros(self.Na)
             proba_dist[5] = 1 # Open the goal (door)
             return proba_dist
-
-        # If know where is the subgoal (key) & not already have subgoal (key) & not already going to the subgoal (key) --> go to the subgoal (key)
-        if (self.learner_beliefs[rf_idx, :, :, 2 + (goal_color - 1) * 2 + 1] == 1).any() and \
-            not self.learner_reached_subgoal[goal_color, rf_idx] and \
-            not self.learner_going_to_subgoal[goal_color, rf_idx]:
-
-            subgoal_pos = np.where(self.learner_beliefs[rf_idx, :, :, 2 + (goal_color - 1) * 2 + 1] == 1)
-            # Obstacle grid # WARNING
-            one_hot = np.zeros(2 + self.num_colors * 2)
-            one_hot[0] = 1
-            grid = np.ones((self.gridsize, self.gridsize)) - np.all(self.learner_beliefs[rf_idx, ...] == one_hot.reshape(1, 1, -1), axis=2)
-            grid[subgoal_pos[0], subgoal_pos[1]] = 0
-            
-            path = A_star_algorithm(learner_pos, subgoal_pos, grid)
-
-            if path is not None:
-                # Empty queues
-                while not self.learner_queue_transitions[goal_color, receptive_field].empty():
-                    _ = self.learner_queue_transitions[goal_color, receptive_field].get()
-                while not self.learner_queue_actions[goal_color][receptive_field].empty():
-                    _ = self.learner_queue_actions[goal_color][receptive_field].get()
-                # Add transitions to go to key
-                for transition in path:
-                    self.learner_queue_transitions[goal_color, receptive_field].put(transition)
-                # Set variable
-                self.learner_going_to_subgoal[goal_color, rf_idx] = True
-                # Return action
-                return self.learner_policy()
-
-        # If know where is the goal (door) & has subgoal (key) & not already going to the goal (door) --> go to the goal (door)
-        elif (self.learner_beliefs[rf_idx, :, :, 2 + (goal_color - 1) * 2] == 1).any() and \
-              self.learner_reached_subgoal[goal_color, rf_idx] and \
-              not self.learner_going_to_goal[goal_color, rf_idx]:
-
-            goal_pos = np.where(self.learner_beliefs[rf_idx, :, :, 2 + (goal_color - 1) * 2] == 1)
-            # Obstacle grid
-            one_hot = np.zeros(2 + self.num_colors * 2)
-            one_hot[0] = 1
-            grid = np.ones((self.gridsize, self.gridsize)) - np.all(self.learner_beliefs[rf_idx, ...] == one_hot.reshape(1, 1, -1), axis=2)
-            grid[goal_pos[0], goal_pos[1]] = 0
-
-            path = A_star_algorithm(learner_pos, goal_pos, grid)
-
-            if path is not None:
-                # Empty queues
-                while not self.learner_queue_transitions[goal_color, receptive_field].empty():
-                    _ = self.learner_queue_transitions[goal_color, receptive_field].get()
-                while not self.learner_queue_actions[goal_color][receptive_field].empty():
-                    _ = self.learner_queue_actions[goal_color][receptive_field].get()
-                # Add transitions to go to goal (door)
-                for transition in path:
-                    self.learner_queue_transitions[goal_color, receptive_field].put(transition)
-                # Set variable
-                self.learner_going_to_goal[goal_color, rf_idx] = True
-                # Return action
-                return self.learner_policy()
         
         # Action to be played
         if not self.learner_queue_actions[goal_color][receptive_field].empty():
+            if goal_color == 0:
+                self.LOG.append(f' rf={receptive_field} action to be done')
             action = self.learner_queue_actions[goal_color][receptive_field].get()
-            return action
+            proba_dist = np.zeros(self.Na)
+            proba_dist[action] = 1
+            return proba_dist
         
         # Position to be reached
-        if not self.learner_queue_transitions[goal_color, receptive_field].empty():
-            pos_init, pos_dest = self.learner_queue_transitions[goal_color, receptive_field].get()
-            
-            # Sanity check
-            assert(pos_init == learner_pos)
+        if not self.learner_queue_transitions[goal_color][receptive_field].empty():
+            if goal_color == 0:
+                self.LOG.append(f' rf={receptive_field} position to be reached')
+            _, pos_dest = self.learner_queue_transitions[goal_color][receptive_field].get()
 
             # If not an obstacle --> add action to reach pos_dest
-            one_hot = np.zeros(2 + self.num_colors * 2)
-            one_hot[0] = 1
-            if np.any(self.learner_beliefs[rf_idx, pos_dest[0], pos_dest[1], :] == one_hot):
-                self.add_actions(learner_pos=learner_pos ,pos_dest=pos_dest,
-                                 learner_dir=learner_dir,
-                                 goal_color=goal_color, rf_idx=rf_idx)
+            one_hot_wall = np.zeros(2 + self.num_colors * 2)
+            one_hot_wall[1] = 1
+            one_hot_goal = np.zeros(2 + self.num_colors * 2)
+            one_hot_goal[2 + goal_color * 2] = 1
+            # If not an obstacle --> add action to reach pos_dest
+            if not (np.all(self.learner_beliefs[rf_idx, pos_dest[0], pos_dest[1], :] == one_hot_wall) \
+                    or (np.all(self.learner_beliefs[rf_idx, pos_dest[0], pos_dest[1], :] == one_hot_goal) and not self.learner_reached_subgoal[goal_color, rf_idx])):
+                self.add_actions(pos_dest=pos_dest, goal_color=goal_color, rf_idx=rf_idx)
 
-            return self.learner_policy()
+            return self.learner_policy(goal_color, rf_idx)
+
+
+        # If know where is the subgoal (key) & not already have subgoal (key) & not already going to the subgoal (key) --> go to the subgoal (key)
+        if (self.learner_beliefs[rf_idx, :, :, 2 + goal_color * 2 + 1] == 1).any() and \
+            not self.learner_reached_subgoal[goal_color, rf_idx]:
+            
+            subgoal_pos = np.where(self.learner_beliefs[rf_idx, :, :, 2 + goal_color * 2 + 1] == 1)
+            # Obstacle grid
+            one_hot_wall = np.zeros(2 + self.num_colors * 2)
+            one_hot_wall[0] = 1
+            grid = np.ones((self.gridsize, self.gridsize)) - np.all(self.learner_beliefs[rf_idx, ...] == one_hot_wall.reshape(1, 1, -1), axis=2)
+            # Check if new info
+            compute_shortest_path = False
+            if np.any(grid != self.learner_obstacle_grid[goal_color, rf_idx]):
+                self.learner_obstacle_grid[goal_color, rf_idx] = grid.copy()
+                compute_shortest_path = True
+            grid[subgoal_pos[0], subgoal_pos[1]] = 0
+
+            # First time computing the shortest path
+            if self.learner_shortest_path_subgoal[goal_color][receptive_field] is None:
+                self.learner_shortest_path_subgoal[goal_color][receptive_field] = SimpleQueue()
+                compute_shortest_path = True
+            
+            # If new info --> compute shortest path
+            if compute_shortest_path:
+                path = A_star_algorithm(self.learner_pos, subgoal_pos, grid)
+                if path is not None:
+                    # Empty previous path
+                    while not self.learner_shortest_path_subgoal[goal_color][receptive_field].empty():
+                        _ = self.learner_shortest_path_subgoal[goal_color][receptive_field].get()
+                    for transition in path:
+                        self.learner_shortest_path_subgoal[goal_color][receptive_field].put(transition)
+            
+            if not self.learner_shortest_path_subgoal[goal_color][receptive_field].empty():
+                if goal_color == 0:
+                    self.LOG.append(f'rf={receptive_field} going to the SUBGOAL')
+                # Add transition to go to subgoal (key)
+                transition = self.learner_shortest_path_subgoal[goal_color][receptive_field].get()
+                self.learner_queue_transitions[goal_color][receptive_field].put(transition)
+                # Set variable
+                self.learner_going_to_subgoal[goal_color, rf_idx] = True
+                # Return action
+                return self.learner_policy(goal_color, rf_idx)
+
+        # If know where is the goal (door) & has subgoal (key) & not already going to the goal (door) --> go to the goal (door)
+        elif (self.learner_beliefs[rf_idx, :, :, 2 + goal_color * 2] == 1).any() and \
+              self.learner_reached_subgoal[goal_color, rf_idx]:
+
+            goal_pos = np.where(self.learner_beliefs[rf_idx, :, :, 2 + goal_color * 2] == 1)
+            # Obstacle grid
+            one_hot_wall = np.zeros(2 + self.num_colors * 2)
+            one_hot_wall[0] = 1
+            grid = np.ones((self.gridsize, self.gridsize)) - np.all(self.learner_beliefs[rf_idx, ...] == one_hot_wall.reshape(1, 1, -1), axis=2)
+            # Check if new info
+            compute_shortest_path = False
+            if np.any(grid != self.learner_obstacle_grid[goal_color, rf_idx]):
+                self.learner_obstacle_grid[goal_color, rf_idx] = grid.copy()
+                compute_shortest_path = True
+            grid[goal_pos[0], goal_pos[1]] = 0
+
+            # First time computing the shortest path
+            if self.learner_shortest_path_goal[goal_color][receptive_field] is None:
+                self.learner_shortest_path_goal[goal_color][receptive_field] = SimpleQueue()
+                compute_shortest_path = True
+            
+            # If new info --> compute shortest path
+            if compute_shortest_path:
+                path = A_star_algorithm(self.learner_pos, goal_pos, grid)
+                if path is not None:
+                    # Empty previous path
+                    while not self.learner_shortest_path_goal[goal_color][receptive_field].empty():
+                        _ = self.learner_shortest_path_goal[goal_color][receptive_field].get()
+                    for transition in path:
+                        self.learner_shortest_path_goal[goal_color][receptive_field].put(transition)
+            
+            if not self.learner_shortest_path_goal[goal_color][receptive_field].empty():
+                if goal_color == 0:
+                    self.LOG.append(f' rf={receptive_field} going to the GOAL')
+                # Add transition to go to goal (door)
+                transition = self.learner_shortest_path_goal[goal_color][receptive_field].get()
+                self.learner_queue_transitions[goal_color][receptive_field].put(transition)
+                # Set variable
+                self.learner_going_to_goal[goal_color, rf_idx] = True
+                # Return action
+                return self.learner_policy(goal_color, rf_idx)
         
-        # Nothing to do 
-        else:
-            # Action that maximizes the exploration
-            return self.learner_best_exploration_action()
+        # Nothing to do --> Action that maximizes the exploration
+        if goal_color == 0:
+            self.LOG.append(f'rf={receptive_field} Exploration')
+        return self.learner_best_exploration_action(goal_color, rf_idx)
         
-    def update_beliefs(self, learner_pos: tuple, learner_dir: int, learner_step_count: int) -> None:
+    def update_knowledge(self, learner_pos: tuple, learner_dir: int, learner_step_count: int) -> None:
+        self.learner_pos = learner_pos
+        self.learner_dir = learner_dir
+        self.learner_step_count += 1
+        assert(self.learner_step_count == learner_step_count)
         
-        for goal_color in range(self.num_colors):
-            for rf_idx in range(self.num_rf):
+        for rf_idx in range(self.num_rf):
+            # Update what the learner knows about the env
+            self.update_learner_belief(rf_idx)
+
+    def observe(self, action: int) -> None:
+        self.LOG.append(f't={self.learner_step_count}')
+        self.LOG.append(f'True action {action}')
+        for rf_idx in range(self.num_rf):
+            for goal_color in range(self.num_colors):
+                # Predict policy of the learner
+                predicted_policy = self.learner_policy(goal_color, rf_idx)
+                if goal_color == 0:
+                    self.LOG.append(f'rf {self.rf_values[rf_idx]} --> {predicted_policy}')
                 # Bayesian update
-                self.beliefs[goal_color, rf_idx] *= self.learner_policy(learner_pos, learner_dir, rf_idx, goal_color, learner_step_count)
+                self.beliefs[goal_color, rf_idx] *= predicted_policy[action]
+              
 
-        beliefs /= beliefs.sum()
+        self.beliefs /= self.beliefs.sum()
 
+        self.LOG.append(list(self.beliefs.copy()))
     
