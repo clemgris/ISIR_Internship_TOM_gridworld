@@ -217,7 +217,7 @@ def plot_agent_obs(pos: tuple, GRID_SIZE: int, img: np.ndarray, hide: bool=False
     ratio = img.shape[0] / GRID_SIZE
     im_agent_pos =np.array([(pos[0] + 0.5) * ratio, (pos[1] + 0.5) * ratio]).astype('int')
     if hide:
-        plt.scatter(im_agent_pos[0], im_agent_pos[1], color=rgb_to_hex((76, 76, 76)), marker='s', s=140)
+        plt.scatter(im_agent_pos[0], im_agent_pos[1], color=rgb_to_hex((76, 76, 76)), marker='s', s=145)
     plt.scatter(im_agent_pos[0], im_agent_pos[1], c='w', marker='*', s=120)
 
 def plot_error_episode_length(colors: np.ndarray, rf_values: list, num_colors: int, dict: dict) -> None:
@@ -243,7 +243,7 @@ def plot_error_episode_length(colors: np.ndarray, rf_values: list, num_colors: i
             n.append(len(filtered_accuracy))
 
         
-        plt.bar(range(len(bins) - 1), mean_accuracy, yerr=1.96 * np.array(std_accuracy) / np.array(n),
+        plt.bar(range(len(bins) - 1), mean_accuracy, yerr=1.96 * np.array(std_accuracy) / np.sqrt(np.array(n)),
                 color=colors[rf_idx], label=f'rf={labels[rf_idx]}')
 
         plt.xlabel('Length of the observed episode')
