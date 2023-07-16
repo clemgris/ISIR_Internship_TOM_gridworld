@@ -31,13 +31,15 @@ class MultiGoalsEnv(MiniGridEnv):
         mission_space = MissionSpace(mission_func=self._gen_mission)
         
         if max_steps is None:
-            max_steps = 4 * size**2
+            self.max_steps = size**2
+        else:
+            self.max_steps = max_steps
 
         super().__init__(
             mission_space=mission_space,
             grid_size=size,
             agent_view_size=agent_view_size,
-            max_steps=max_steps,
+            max_steps=self.max_steps,
             see_through_walls=True,
             **kwargs,
         )
@@ -96,10 +98,36 @@ class MultiGoalsEnv(MiniGridEnv):
 
         self.mission = "Open the door with the right color"
 
+    def reset_grid(self):
+
+        self.carrying = None
+
+        self.grid = Grid(self.width, self.height)
+
+        # Place walls around
+        for i in range(0, self.height):
+            for j in range(0, self.width):
+                self.grid.set(0, i, Wall())
+                self.grid.set(self.width - 1, i, Wall())
+                self.grid.set(j, 0, Wall())
+                self.grid.set(j, self.height - 1, Wall())
+            
+        for ii in range(self.num_doors):
+
+            # Create door and key at random position
+            i_door, j_door = self.obj_idx[1 + 2 * ii]
+            i_key, j_key = self.obj_idx[1 + 2 * ii + 1]
+
+            door = Door(IDX_TO_COLOR[ii+1], is_locked=True)
+            key = Key(IDX_TO_COLOR[ii+1])
+
+            # Add door and key to the env
+            self.grid.set(i_door, j_door, door)
+            self.grid.set(i_key, j_key, key)
+
     def reset_agent_pos(self):
         self.agent_pos = self.agent_start_pos
         self.agent_dir = self.agent_start_dir
-
 
     def step(self, action: Actions):
         obs, reward, terminated, truncated, info = super().step(action)
