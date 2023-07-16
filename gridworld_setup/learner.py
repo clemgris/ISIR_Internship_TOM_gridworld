@@ -18,9 +18,10 @@ class BayesianLearner:
                  grid_size: int=20,
                  num_colors: int=4,
                  save_render: bool=False,
-                 max_steps: int=200
+                 max_steps: int | None = None
                  ) -> None:
         
+        self.grid_size = grid_size
         self.goal_color = goal_color + 1
         self.receptive_field = receptive_field
         self.max_steps = max_steps
@@ -88,6 +89,36 @@ class BayesianLearner:
                                  agent_view_size=self.receptive_field,
                                  num_colors=num_colors,
                                  max_steps=self.max_steps)
+        
+        self.max_steps = self.env.max_steps
+
+    def reset(self) -> None:
+        # Reset env
+        self.env.step_count = 0
+        self.env.reset_agent_pos()
+        self.env.reset_grid()
+
+        # Reset what the learner knows about the env
+        self.reached_subgoal = False
+
+        self.actions = SimpleQueue()
+        self.transitions = SimpleQueue()
+
+        self.reward = 0
+        self.terminated = False
+        self.going_to_subgoal = False
+        self.going_to_goal = False
+
+        self.obstacle_grid = np.ones((self.env.height, self.env.width))
+        self.shortest_path_subgoal = None
+        self.shortest_path_goal = None
+
+        # Init with uniform beliefs (no prior)
+        self.beliefs = 1 / 4 * np.ones((self.grid_size, self.grid_size, 4))
+
+    def change_receptive_field(self, new_receptive_field: int) -> None:
+        self.env.agent_view_size = new_receptive_field
+        self.receptive_field = new_receptive_field
     
     def play(self, size: int=None) -> list:
         
@@ -96,7 +127,13 @@ class BayesianLearner:
 
         actions = []
         for _ in range(size):
+
+            self.LOG.append(f't={self.env.step_count}')
+            
             a = self.policy()
+
+            self.LOG.append(f'action {a}')
+
             actions.append(a)
             
             action = Actions(a)
@@ -112,6 +149,7 @@ class BayesianLearner:
 
             if terminated:
                 break
+
 
         if self.save_render:
 
@@ -220,7 +258,9 @@ class BayesianLearner:
                 else:
                     # Add transitions to go to exploratory goal
                     self.LOG.append('Exploratory goal')
-                    self.transitions.put(path[0])
+                    mapped_actions = map_actions(self.env.agent_pos, path[0][1], self.env.agent_dir)
+                    self.actions.put(mapped_actions[0])
+                    # self.transitions.put(path[0])
                     return self.policy()
                 
         return self.active_exploration_policy(forced=True)
@@ -251,7 +291,6 @@ class BayesianLearner:
         # If all the actions are equal --> select closest exploration goal
         else:
             return self.exploration_goal()
-            
 
     def add_actions(self, pos_dest: tuple) -> None:
         # Mapping position transition --> actions
@@ -273,6 +312,13 @@ class BayesianLearner:
 
         agent_pos = self.env.agent_pos
         return self.beliefs[agent_pos[0] + dx, agent_pos[1] + dy, obj_idx] == 1
+
+    def empty_queues(self):
+        while not self.actions.empty():
+            self.actions.get()
+        while not self.transitions.empty():
+            self.transitions.get()
+        return self.policy()
         
     def policy(self):
         self.LOG.append('Enter policy')
@@ -363,7 +409,7 @@ class BayesianLearner:
 
             if not self.shortest_path_subgoal.empty():
                 self.LOG.append('Go to subgoal')
-                # Add transition to go to key
+                # Add transition to go to subgoal (key)
                 self.transitions.put(self.shortest_path_subgoal.get())
                 # Set variable
                 self.going_to_subgoal = True
