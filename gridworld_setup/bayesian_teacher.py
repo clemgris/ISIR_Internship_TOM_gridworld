@@ -1,6 +1,7 @@
 from minigrid.core.constants import DIR_TO_VEC
+from minigrid.core.actions import Actions
 
-from environment import MultiGoalsEnv
+from environment import MultiGoalsEnv, MultiRoomsGoalsEnv
 from utils import *
 
 import numpy as np
@@ -13,7 +14,7 @@ from queue import SimpleQueue
 class BayesianTeacher:
 
     def __init__(self,
-                 env: MultiGoalsEnv,
+                 env: MultiGoalsEnv | MultiRoomsGoalsEnv,
                  num_colors: int=4,
                  rf_values: np.ndarray=np.array([3,5,7]),
                  Na: int=6,
@@ -36,7 +37,7 @@ class BayesianTeacher:
 
         self.LOG = []
 
-    def init_env(self, env: MultiGoalsEnv) -> None:
+    def init_env(self, env: MultiGoalsEnv | MultiRoomsGoalsEnv) -> None:
         self.env = env
         self.gridsize = self.env.height
         self.learner_beliefs = 1. / (2 + 2 * self.num_colors) * np.ones((len(self.rf_values), self.gridsize, self.gridsize, 2 + 2 * self.num_colors))
@@ -56,16 +57,20 @@ class BayesianTeacher:
         grid = self.env.grid.slice(topX, topY, receptive_field, receptive_field)
         for _ in range(self.learner_dir + 1):
             grid = grid.rotate_left()
-        vis_mask = np.ones(shape=(grid.width, grid.height), dtype=bool)
+
+        if self.env.see_through_walls or receptive_field == self.env.height:
+            vis_mask = np.ones(shape=(grid.width, grid.height), dtype=bool)
+        else:
+            vis_mask = grid.process_vis(agent_pos=(receptive_field // 2, receptive_field - 1))
 
         obs = grid.encode(vis_mask)
 
-        return obs
+        return obs, vis_mask
 
     def update_learner_belief(self, rf_idx: int) -> None:
         
         receptive_field = self.rf_values[rf_idx]
-        obs = self.compute_learner_obs(receptive_field)
+        obs, vis_mask = self.compute_learner_obs(receptive_field)
 
         f_vec = DIR_TO_VEC[self.learner_dir]
         dir_vec = DIR_TO_VEC[self.learner_dir]
@@ -77,9 +82,13 @@ class BayesianTeacher:
             - r_vec * (receptive_field // 2)
         )
         new_cells = 0
+
         # For each cell in the visibility mask
         for vis_j in range(0, receptive_field):
             for vis_i in range(0, receptive_field):
+
+                if not vis_mask[vis_i, vis_j]:
+                    continue
 
                 # Compute the world coordinates of this cell
                 abs_i, abs_j = top_left - (f_vec * vis_j) + (r_vec * vis_i)
@@ -209,7 +218,6 @@ class BayesianTeacher:
         grid[subgoal_pos[0], subgoal_pos[1]] = 0
         # Update distance to the subgoal
         self.distance_subgoal[rf_idx, goal_color, :] = Dijkstra(grid, subgoal_pos[0], subgoal_pos[1])
-
     
     def learner_policy(self, goal_color: int, rf_idx: int) -> np.ndarray:
             
@@ -292,14 +300,17 @@ class BayesianTeacher:
             # Action that maximizes the exploration
             return self.learner_exploration_policy(goal_color, rf_idx)
         
-    def update_knowledge(self, learner_pos: tuple, learner_dir: int, learner_step_count: int) -> None:
+    def update_knowledge(self, learner_pos: tuple, learner_dir: int, learner_step_count: int, rf_idx: int | None = None) -> None:
         self.learner_pos = learner_pos
         self.learner_dir = learner_dir
         self.learner_step_count += 1
         assert(self.learner_step_count == learner_step_count)
         
-        for rf_idx in range(self.num_rf):
-            # Update what the learner knows about the env
+        if rf_idx is None:
+            for rf_idx in range(self.num_rf):
+                # Update what the learner knows about the env
+                self.update_learner_belief(rf_idx)
+        else:
             self.update_learner_belief(rf_idx)
 
     def observe(self, action: int) -> None:
@@ -322,14 +333,14 @@ class BayesianTeacher:
         self.LOG.append(f'pred {list(np.around(self.beliefs, 4))}')
 
 
-##
+##          
 # Bayesian teacher that knows learner is using A* algo to compute the shortest path & active exploration
 ##
 
 class AlignedBayesianTeacher:
 
     def __init__(self,
-                 env: MultiGoalsEnv,
+                 env: MultiGoalsEnv | MultiRoomsGoalsEnv,
                  num_colors: int=4,
                  rf_values: np.ndarray=np.array([3,5,7,15]),
                  Na: int=6
@@ -377,19 +388,23 @@ class AlignedBayesianTeacher:
         topX, topY, _, _ = get_view(self.learner_pos, self.learner_dir, receptive_field)
         
         grid = self.env.grid.slice(topX, topY, receptive_field, receptive_field)
-        for i in range(self.learner_dir + 1):
+        for _ in range(self.learner_dir + 1):
             grid = grid.rotate_left()
-        vis_mask = np.ones(shape=(grid.width, grid.height), dtype=bool)
+
+        if self.env.see_through_walls:
+            vis_mask = np.ones(shape=(grid.width, grid.height), dtype=bool)
+        else:
+            vis_mask = grid.process_vis(agent_pos=(receptive_field // 2, receptive_field - 1))
 
         obs = grid.encode(vis_mask)
 
-        return obs
+        return obs, vis_mask
 
     def update_learner_belief(self, rf_idx: int) -> None:
         
         receptive_field = self.rf_values[rf_idx]
 
-        obs = self.compute_learner_obs(receptive_field)
+        obs, vis_mask = self.compute_learner_obs(receptive_field)
 
         f_vec = DIR_TO_VEC[self.learner_dir]
         dir_vec = DIR_TO_VEC[self.learner_dir]
@@ -404,6 +419,9 @@ class AlignedBayesianTeacher:
         # For each cell in the visibility mask
         for vis_j in range(0, receptive_field):
             for vis_i in range(0, receptive_field):
+
+                if not vis_mask[vis_i, vis_j]:
+                    continue
 
                 # Compute the world coordinates of this cell
                 abs_i, abs_j = top_left - (f_vec * vis_j) + (r_vec * vis_i)
