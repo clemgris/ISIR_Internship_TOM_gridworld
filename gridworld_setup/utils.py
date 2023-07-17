@@ -1,8 +1,22 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
+from minigrid.core.constants import DIR_TO_VEC
+
+from environment import MultiGoalsEnv, MultiRoomsGoalsEnv
+
 from queue import PriorityQueue
 import heapq
+
+def draw(proba_dist: np.array) -> int:
+    assert(np.isclose(proba_dist.sum(), 1.))
+    rand_num = np.random.uniform(0, 1)
+    cum_prob = np.cumsum(proba_dist)
+    for idx, _ in enumerate(proba_dist):
+        if cum_prob[idx] >= rand_num:
+            selected_idx = idx
+            break
+    return selected_idx
 
 def Shannon_entropy(proba_dist: np.array, axis: int=None) -> float | np.ndarray:
     # Compute the Shannon Entropy 
@@ -188,9 +202,42 @@ def get_view(agent_pos: tuple, agent_dir: int, receptive_field: int) -> tuple:
 
     return (topX, topY, botX, botY)
 
-def obj_in_view(agent_pos: tuple, agent_dir: int, receptive_field: int, obj_pos: tuple) -> bool:
-    topX, topY, botX, botY = get_view(agent_pos, agent_dir, receptive_field)
-    return (topX <= obj_pos[0] < botX) & (topY <= obj_pos[1] < botY)
+def obj_in_view(agent_pos: tuple, agent_dir: int, receptive_field: int, obj_pos: tuple, env: MultiGoalsEnv | MultiRoomsGoalsEnv) -> bool:
+    
+    topX, topY, _, _ = get_view(agent_pos, agent_dir, receptive_field)
+    
+    grid = env.grid.slice(topX, topY, receptive_field, receptive_field)
+    for _ in range(agent_dir + 1):
+        grid = grid.rotate_left()
+
+    if env.see_through_walls:
+        vis_mask = np.ones(shape=(grid.width, grid.height), dtype=bool)
+    else:
+        vis_mask = grid.process_vis(agent_pos=(receptive_field // 2, receptive_field - 1))
+
+    f_vec = DIR_TO_VEC[agent_dir]
+    dir_vec = DIR_TO_VEC[agent_dir]
+    dx, dy = dir_vec
+    r_vec =  np.array((-dy, dx))
+    top_left = (
+        agent_pos
+        + f_vec * (receptive_field - 1)
+        - r_vec * (receptive_field // 2)
+    )
+
+    # For each cell in the visibility mask
+    for vis_j in range(0, receptive_field):
+        for vis_i in range(0, receptive_field):
+            
+            if not vis_mask[vis_i, vis_j]:
+                continue
+
+            # Compute the world coordinates of this cell
+            abs_i, abs_j = top_left - (f_vec * vis_j) + (r_vec * vis_i)
+            if (abs_i, abs_j) == obj_pos:
+                return True
+
+    return False
 
 ##
 # Visualization
