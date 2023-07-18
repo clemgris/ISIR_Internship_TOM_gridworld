@@ -249,7 +249,7 @@ def plot_grid(start, num, size, alpha=0.5):
         plt.plot([x, x], [start, size], alpha=alpha, c='gray')
         plt.plot([start, size], [x, x], alpha=alpha, c='gray')
 
-def plot_agent_play(pos: tuple, dir: int) -> None:
+def plot_agent_play(pos: tuple, dir: int, size: float=120) -> None:
     if dir == 0:
         marker = ">"
     elif dir == 1:
@@ -258,14 +258,16 @@ def plot_agent_play(pos: tuple, dir: int) -> None:
         marker = "<"
     elif dir == 3:
         marker = "^"
-    plt.scatter(pos[0], pos[1], marker=marker, c='r', s=120)
+    plt.scatter(pos[0], pos[1], marker=marker, c='r', s=size)
 
-def plot_agent_obs(pos: tuple, GRID_SIZE: int, img: np.ndarray, hide: bool=False) -> None:
+def plot_agent_obs(pos: tuple, GRID_SIZE: int, img: np.ndarray, hide: bool=False, size: float | None=None) -> None:
     ratio = img.shape[0] / GRID_SIZE
+    if size is None:
+        size = ratio * 0.5
     im_agent_pos =np.array([(pos[0] + 0.5) * ratio, (pos[1] + 0.5) * ratio]).astype('int')
     if hide:
-        plt.scatter(im_agent_pos[0], im_agent_pos[1], color=rgb_to_hex((76, 76, 76)), marker='s', s=145)
-    plt.scatter(im_agent_pos[0], im_agent_pos[1], c='w', marker='*', s=120)
+        plt.scatter(im_agent_pos[0], im_agent_pos[1], color=rgb_to_hex((76, 76, 76)), marker='s', s=size)
+    plt.scatter(im_agent_pos[0], im_agent_pos[1], c='w', marker='*', s=size)
 
 def plot_error_episode_length(colors: np.ndarray, rf_values: list, num_colors: int, dict: dict) -> None:
     labels = np.concatenate((np.array(rf_values)[:-1], np.array(['full obs'])))
