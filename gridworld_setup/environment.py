@@ -116,7 +116,9 @@ class MultiGoalsEnv(MiniGridEnv):
                 self.grid.set(self.width - 1, i, Wall())
                 self.grid.set(j, 0, Wall())
                 self.grid.set(j, self.height - 1, Wall())
-            
+        
+        self.doors = []
+        self.keys = []
         for ii in range(self.num_doors):
 
             # Create door and key at random position
@@ -125,6 +127,8 @@ class MultiGoalsEnv(MiniGridEnv):
 
             door = Door(IDX_TO_COLOR[ii+1], is_locked=True)
             key = Key(IDX_TO_COLOR[ii+1])
+            self.doors.append(door)
+            self.keys.append(key)
 
             # Add door and key to the env
             self.grid.set(i_door, j_door, door)
@@ -280,7 +284,9 @@ class MultiRoomsGoalsEnv(MiniGridEnv):
         # Place walls
         for (i,j) in self.wall_idx:
             self.grid.set(i, j, Wall())
-            
+        
+        self.doors = []
+        self.keys = []
         for ii in range(self.num_doors):
 
             # Place doors and keys
@@ -289,6 +295,8 @@ class MultiRoomsGoalsEnv(MiniGridEnv):
 
             door = Door(IDX_TO_COLOR[ii+1], is_locked=True)
             key = Key(IDX_TO_COLOR[ii+1])
+            self.doors.append(door)
+            self.keys.append(key)
 
             self.grid.set(i_door, j_door, door)
             self.grid.set(i_key, j_key, key)
