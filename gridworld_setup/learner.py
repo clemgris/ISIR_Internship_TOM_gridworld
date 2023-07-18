@@ -133,6 +133,36 @@ class BayesianLearner:
     def change_receptive_field(self, new_receptive_field: int) -> None:
         self.env.agent_view_size = new_receptive_field
         self.receptive_field = new_receptive_field
+        if new_receptive_field >= self.env.height:
+            self.env.see_through_walls = True
+        else:
+            self.env.see_through_walls = False
+
+    def reset(self) -> None:
+        self.env.reset_grid()
+        self.env.agent_view_size = self.receptive_field
+        if self.receptive_field >= self.env.height:
+            self.env.see_through_walls = True
+        else:
+            self.env.see_through_walls = False
+
+        # Init with uniform beliefs (no prior)
+        self.beliefs = 1 / 4 * np.ones((self.env.height, self.env.height, 4))
+
+        # Reset
+        self.reached_subgoal = False
+
+        self.actions = SimpleQueue()
+        self.transitions = SimpleQueue()
+
+        self.reward = 0
+        self.terminated = False
+        self.going_to_subgoal = False
+        self.going_to_goal = False
+
+        self.obstacle_grid = np.ones((self.env.height, self.env.width))
+        self.shortest_path_subgoal = None
+        self.shortest_path_goal = None
     
     def play(self, size: int=None) -> list:
         
