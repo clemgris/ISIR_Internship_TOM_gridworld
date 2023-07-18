@@ -332,7 +332,39 @@ class BayesianTeacher:
         self.beliefs /= self.beliefs.sum()
         self.LOG.append(f'pred {list(np.around(self.beliefs, 4))}')
 
+    def predicted_reward(self, demo: list, goal_color: int, rf_idx: int) -> float: 
+        # Reset env AND estimate beliefs of the learner
+        self.env.reset_grid()
+        self.init_env(self.env)
+        self.learner_step_count = 0
 
+        if len(demo) > 0:
+            # Add first unused action to get the first observation
+            demo = [4] + demo
+        else:
+            demo = demo
+        
+        # Simulate the learner observing the demo
+        for a in demo:
+            action = Actions(a)
+            _, _, _, _, _ = self.env.step(action)
+            self.update_knowledge(self.env.agent_pos, self.env.agent_dir, self.env.step_count, rf_idx)
+        
+        # Simulate the learner playing on the env AFTER seen the demo
+        self.env.reset_grid()
+        self.learner_step_count = 0
+        terminated = False
+        while (not terminated) and (self.env.step_count < self.env.max_steps):
+            a = draw(self.learner_policy(goal_color, rf_idx))
+            action = Actions(a)
+            _, reward, terminated, _, _ = self.env.step(action)
+            self.update_knowledge(self.env.agent_pos, self.env.agent_dir, self.env.step_count, rf_idx)
+            
+        # Reset env
+        self.env.reset_grid()
+
+        # Return the predicted reward
+        return reward
 ##          
 # Bayesian teacher that knows learner is using A* algo to compute the shortest path & active exploration
 ##
@@ -507,9 +539,9 @@ class AlignedBayesianTeacher:
 
         argmax_set = np.where(np.isclose(scores, np.max(scores)))[0]
         
-        eps = 0.5
+        # eps = 0.5
         proba_dist = np.zeros(self.Na)
-        proba_dist[np.array([0, 1, 2])] = eps
+        # proba_dist[np.array([0, 1, 2])] = eps
         proba_dist[argmax_set] = 1
         proba_dist /= proba_dist.sum()
         
@@ -720,4 +752,38 @@ class AlignedBayesianTeacher:
         self.beliefs /= self.beliefs.sum()
 
         self.LOG.append(list(self.beliefs.copy()))
+
+    def predicted_reward(self, demo: list, goal_color: int, rf_idx: int) -> float: 
+        # Reset env AND estimate beliefs of the learner
+        self.env.reset_grid()
+        self.init_env(self.env)
+        self.learner_step_count = 0
+
+        if len(demo) > 0:
+            # Add first unused action to get the first observation
+            demo = [4] + demo
+        else:
+            demo = demo
+        
+        # Simulate the learner observing the demo
+        for a in demo:
+            action = Actions(a)
+            _, _, _, _, _ = self.env.step(action)
+            self.update_knowledge(self.env.agent_pos, self.env.agent_dir, self.env.step_count, rf_idx)
+        
+        # Simulate the learner playing on the env AFTER seen the demo
+        self.env.reset_grid()
+        self.learner_step_count = 0
+        terminated = False
+        while (not terminated) and (self.env.step_count < self.env.max_steps):
+            a = draw(self.learner_policy(goal_color, rf_idx))
+            action = Actions(a)
+            _, reward, terminated, _, _ = self.env.step(action)
+            self.update_knowledge(self.env.agent_pos, self.env.agent_dir, self.env.step_count, rf_idx)
+        
+        # Reset env
+        self.env.reset_grid()
+        
+        # Return the predicted reward
+        return reward
     
