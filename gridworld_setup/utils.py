@@ -1,7 +1,6 @@
 import numpy as np
-import matplotlib.pyplot as plt
-
 from minigrid.core.constants import DIR_TO_VEC
+from minigrid.core.actions import Actions
 
 from environment import MultiGoalsEnv, MultiRoomsGoalsEnv
 
@@ -239,73 +238,167 @@ def obj_in_view(agent_pos: tuple, agent_dir: int, receptive_field: int, obj_pos:
 
     return False
 
-##
-# Visualization
-##
+def compute_learner_obs(pos: tuple, dir: int, receptive_field: int, env: MultiGoalsEnv | MultiRoomsGoalsEnv) -> np.ndarray:
+    
+    topX, topY, _, _ = get_view(pos, dir, receptive_field)
+    
+    grid = env.grid.slice(topX, topY, receptive_field, receptive_field)
+    for _ in range(dir + 1):
+        grid = grid.rotate_left()
 
-def plot_grid(start, num, size, alpha=0.5):
-    idx = np.linspace(start, size, num)
-    for x in idx:
-        plt.plot([x, x], [start, size], alpha=alpha, c='gray')
-        plt.plot([start, size], [x, x], alpha=alpha, c='gray')
+    if env.see_through_walls:
+        vis_mask = np.ones(shape=(grid.width, grid.height), dtype=bool)
+    else:
+        vis_mask = grid.process_vis(agent_pos=(receptive_field // 2, receptive_field - 1))
 
-def plot_agent_play(pos: tuple, dir: int, size: float=120) -> None:
-    if dir == 0:
-        marker = ">"
-    elif dir == 1:
-        marker = "v"
-    elif dir == 2:
-        marker = "<"
-    elif dir == 3:
-        marker = "^"
-    plt.scatter(pos[0], pos[1], marker=marker, c='r', s=size)
+    obs = grid.encode(vis_mask)
 
-def plot_agent_obs(pos: tuple, GRID_SIZE: int, img: np.ndarray, hide: bool=False, size: float | None=None) -> None:
-    ratio = img.shape[0] / GRID_SIZE
-    if size is None:
-        size = ratio * 0.5
-    im_agent_pos =np.array([(pos[0] + 0.5) * ratio, (pos[1] + 0.5) * ratio]).astype('int')
-    if hide:
-        plt.scatter(im_agent_pos[0], im_agent_pos[1], color=rgb_to_hex((76, 76, 76)), marker='s', s=size)
-    plt.scatter(im_agent_pos[0], im_agent_pos[1], c='w', marker='*', s=size)
+    return obs, vis_mask
 
-def plot_error_episode_length(colors: np.ndarray, rf_values: list, num_colors: int, dict: dict) -> None:
-    labels = np.concatenate((np.array(rf_values)[:-1], np.array(['full obs'])))
-    for rf_idx, receptive_field in reversed(list(enumerate(rf_values))):
-        all_length = []
-        all_accuracy = []
-        for goal_color in range(num_colors):
-            all_length += dict[receptive_field][goal_color]['length']
-            all_accuracy += dict[receptive_field][goal_color]['accuracy']['rf']
 
-        bins = np.arange(0, (np.max(all_length) // 20 + 1) * 20 + 1, 20)
+def generate_demo(env: MultiGoalsEnv | MultiRoomsGoalsEnv, rf: int, goal_color: int):
+    
+    # Save current config of the env
+    prev_agent_view_size = env.agent_view_size
+    
+    gridsize = env.height
+    assert(env.height == env.width)
 
-        mean_accuracy = []
-        std_accuracy = []
-        n = []
-        for i in range(len(bins) - 1):
-            lower_bound = bins[i]
-            upper_bound = bins[i + 1]
-            filtered_accuracy = [acc for dist, acc in zip(all_length, all_accuracy) if lower_bound <= dist <= upper_bound]
-            mean_accuracy.append(np.mean(filtered_accuracy))
-            std_accuracy.append(np.std(filtered_accuracy))
-            n.append(len(filtered_accuracy))
+    # Teacher has full observability
+    env.agent_view_size = gridsize
+    env.reset_grid()
+    
+    # Get image of the env
+    env_image = np.ones((gridsize, gridsize))
+    obs = env.grid.encode(np.ones((gridsize, gridsize)))
+    
+    for abs_j in range(0, gridsize):
+        for abs_i in range(0, gridsize):
+            color_idx = obs[abs_i, abs_j, 1]
 
-        
-        plt.bar(range(len(bins) - 1), mean_accuracy, yerr=1.96 * np.array(std_accuracy) / np.sqrt(np.array(n)),
-                color=colors[rf_idx], label=f'rf={labels[rf_idx]}')
+            # Goal
+            if obs[abs_i, abs_j, 0] == 4 and color_idx == goal_color + 1:
+                value = 3
+                goal_pos = (abs_i, abs_j)
+            # Subgoal (key)
+            elif obs[abs_i, abs_j, 0] == 5 and color_idx == goal_color + 1:
+                value = 2
+                subgoal_pos = (abs_i, abs_j)
+            # Wall
+            elif obs[abs_i, abs_j, 0] in [2, 5, 4]:
+                value = 1
+            # Nothing
+            else:
+                value= 0
 
-        plt.xlabel('Length of the observed episode')
-        plt.ylabel('Mean Accuracy (MAP)')
-        plt.title('Mean accuracy (MAP) per episode length')
+            env_image[abs_i, abs_j] = value
+    obstacle_grid = (env_image != 0)
 
-        plt.xticks(range(len(bins) - 1), [f'[{bins[i]},{bins[i + 1]}]' for i in range(len(bins) - 1)])
+    # Create demo
+    env.agent_view_size = rf
+    env.reset_grid()
 
-    plt.plot([-0.5, len(bins) - 1.5], [1, 1], label='Max', ls='--', c='k')
-    plt.legend()
+    subgoal_dist = Manhattan_dist(env.agent_pos, subgoal_pos)
+    goal_dist = Manhattan_dist(env.agent_pos, goal_pos)
+    
+    # Go first to the closest object
+    if subgoal_dist < goal_dist:
+        Goals = [subgoal_pos, goal_pos]
+    else:
+        Goals = [goal_pos, subgoal_pos]
 
-def rgb_to_hex(rgb):
-    r, g, b = [max(0, min(255, int(channel))) for channel in rgb]
-    # Convert RGB to hexadecimal color code (i.e. map to color type in python)
-    hex_code = '#{:02x}{:02x}{:02x}'.format(r, g, b)
-    return hex_code
+    traj = []
+    for g in Goals:
+        # Remove object g from obstacles
+        obstacle_grid[g[0], g[1]] = 0
+        # Compute shortest path
+        path = A_star_algorithm(env.agent_pos, g, obstacle_grid)
+        # Put object g in obtacles
+        obstacle_grid[g[0], g[1]] = 1
+
+        ii = 0
+        while not obj_in_view(env.agent_pos, env.agent_dir, rf, g, env):
+            transition = path[ii]
+            actions = map_actions(env.agent_pos, transition[1], env.agent_dir)
+            for a in actions:
+                env.step(Actions(a))
+                traj.append(a)
+                if obj_in_view(env.agent_pos, env.agent_dir, rf, g, env):
+                    break
+            ii += 1
+
+    # Reset the position of the agent in the env and the env config
+    env.agent_view_size = prev_agent_view_size
+    env.reset_grid()
+    
+    return traj
+    
+def compute_opt_length(env: MultiGoalsEnv, goal_color: int):
+    
+    # Save current config of the env
+    prev_agent_view_size = env.agent_view_size
+    
+    gridsize = env.height
+    assert(env.height == env.width)
+
+    # Teacher has full observability
+    env.agent_view_size = gridsize
+    env.reset_grid()
+
+    env_image = np.ones((gridsize, gridsize))
+    obs = env.grid.encode(np.ones((gridsize, gridsize)))
+    
+    # Get image of the env
+    for abs_j in range(0, gridsize):
+        for abs_i in range(0, gridsize):
+            color_idx = obs[abs_i, abs_j, 1]
+
+            # Goal
+            if obs[abs_i, abs_j, 0] == 4 and color_idx == goal_color + 1:
+                value = 3
+                goal_pos = (abs_i, abs_j)
+            # Subgoal (key)
+            elif obs[abs_i, abs_j, 0] == 5 and color_idx == goal_color + 1:
+                value = 2
+                subgoal_pos = (abs_i, abs_j)
+            # Wall
+            elif obs[abs_i, abs_j, 0] in [2, 5, 4]:
+                value = 1
+            # Nothing
+            else:
+                value= 0
+
+            env_image[abs_i, abs_j] = value
+
+    obstacle_grid = (env_image == 1)
+    obstacle_grid[goal_pos[0], goal_pos[1]] = 1
+    
+    # Compute length of the optimal path to finish the task
+    length_opt_path = 0
+    agent_dir = env.agent_start_dir
+
+    path_subgoal = A_star_algorithm(env.agent_start_pos, subgoal_pos, obstacle_grid)
+    for trans in path_subgoal:
+        actions = map_actions(trans[0], trans[1], agent_dir)
+        for a in actions:
+            if a == 0:
+                agent_dir = (agent_dir - 1) % 4
+            elif a == 1:
+                agent_dir = (agent_dir + 1) % 4
+            length_opt_path += 1
+    obstacle_grid[goal_pos[0], goal_pos[1]] = 0
+    path_goal = A_star_algorithm(subgoal_pos, goal_pos, obstacle_grid)
+    for trans in path_goal:
+        actions = map_actions(trans[0], trans[1], agent_dir)
+        for a in actions:
+            if a == 0:
+                agent_dir = (agent_dir - 1) % 4
+            elif a == 1:
+                agent_dir = (agent_dir + 1) % 4
+            length_opt_path += 1
+
+    # Reset the position of the agent in the env and the env config
+    env.agent_view_size = prev_agent_view_size
+    env.reset_grid()
+
+    return length_opt_path
