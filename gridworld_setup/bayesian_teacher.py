@@ -7,6 +7,8 @@ from utils import *
 import numpy as np
 from queue import SimpleQueue
 
+from typing import Callable
+
 ##
 # Bayesian teacher that knows rational learner
 ##
@@ -22,16 +24,16 @@ class BayesianTeacher:
                  ) -> None:
         
         self.Na = Na
+        self.rf_values_basic = rf_values
 
         # Boltzmann temperature parameter (confidence in greedy)
         self.lambd = lambd
 
         self.num_colors = num_colors
-        self.num_rf = len(rf_values)
-        self.rf_values = rf_values
+        self.num_rf = len(rf_values) + 1
         
         # Init beliefs on the type of learner
-        self.beliefs = 1. / ( num_colors * len(rf_values)) * np.ones((num_colors, len(rf_values)))
+        self.beliefs = 1. / ( num_colors * len(rf_values)) * np.ones((num_colors, self.num_rf))
         # Init env and learner beliefs about the env
         self.init_env(env)
 
@@ -40,7 +42,9 @@ class BayesianTeacher:
     def init_env(self, env: MultiGoalsEnv | MultiRoomsGoalsEnv) -> None:
         self.env = env
         self.gridsize = self.env.height
-        self.learner_beliefs = 1. / (2 + 2 * self.num_colors) * np.ones((len(self.rf_values), self.gridsize, self.gridsize, 2 + 2 * self.num_colors))
+        self.rf_values = self.rf_values = np.concatenate((self.rf_values_basic, np.array([self.gridsize])))
+
+        self.learner_beliefs = 1. / (2 + 2 * self.num_colors) * np.ones((self.num_rf, self.gridsize, self.gridsize, 2 + 2 * self.num_colors))
 
         self.learner_going_to_subgoal = np.zeros((self.num_colors, self.num_rf), dtype=bool)
         self.learner_going_to_goal = np.zeros((self.num_colors, self.num_rf), dtype=bool)
@@ -50,27 +54,10 @@ class BayesianTeacher:
         self.distance_subgoal = np.zeros((self.num_rf, self.num_colors, self.gridsize, self.gridsize))
         self.distance_goal = np.zeros((self.num_rf, self.num_colors, self.gridsize, self.gridsize))
 
-    def compute_learner_obs(self, receptive_field: int) -> np.ndarray:
-        
-        topX, topY, _, _ = get_view(self.learner_pos, self.learner_dir, receptive_field)
-        
-        grid = self.env.grid.slice(topX, topY, receptive_field, receptive_field)
-        for _ in range(self.learner_dir + 1):
-            grid = grid.rotate_left()
-
-        if self.env.see_through_walls or receptive_field == self.env.height:
-            vis_mask = np.ones(shape=(grid.width, grid.height), dtype=bool)
-        else:
-            vis_mask = grid.process_vis(agent_pos=(receptive_field // 2, receptive_field - 1))
-
-        obs = grid.encode(vis_mask)
-
-        return obs, vis_mask
-
     def update_learner_belief(self, rf_idx: int) -> None:
         
         receptive_field = self.rf_values[rf_idx]
-        obs, vis_mask = self.compute_learner_obs(receptive_field)
+        obs, vis_mask = compute_learner_obs(self.learner_pos, self.learner_dir, receptive_field, self.env)
 
         f_vec = DIR_TO_VEC[self.learner_dir]
         dir_vec = DIR_TO_VEC[self.learner_dir]
@@ -157,6 +144,7 @@ class BayesianTeacher:
             raise ValueError('Unknown object for distance map')
 
         proba_dist = np.zeros(self.Na)
+        const = distance_map[rf_idx, goal_color, self.learner_pos[0], self.learner_pos[1]]
         for action in range(3):
             # Boltzman wrt distance to the goal
             if action in [0, 1]: # Turn left or right
@@ -171,14 +159,14 @@ class BayesianTeacher:
                 next_next_pos = self.learner_pos + DIR_TO_VEC[next_next_dir] # U-turn
                 
                 # Turn OR U-turn
-                proba_dist[action] = 0.5 * (np.exp( - distance_map[rf_idx, goal_color, next_pos[0], next_pos[1]] / self.lambd) \
-                                            + np.exp( - distance_map[rf_idx, goal_color, next_next_pos[0], next_next_pos[1]] / self.lambd))
+                proba_dist[action] = 0.5 * (np.exp( - (distance_map[rf_idx, goal_color, next_pos[0], next_pos[1]] - const) / self.lambd) \
+                                            + np.exp( - (distance_map[rf_idx, goal_color, next_next_pos[0], next_next_pos[1]] - const) / self.lambd))
 
             else:
                 # Forward
                 next_dir = self.learner_dir
                 next_pos = self.learner_pos + DIR_TO_VEC[next_dir]
-                proba_dist[action] = np.exp( - distance_map[rf_idx, goal_color, next_pos[0], next_pos[1]] / self.lambd)
+                proba_dist[action] = np.exp( - (distance_map[rf_idx, goal_color, next_pos[0], next_pos[1]] - const) / self.lambd)
         # Normalize
         proba_dist /= proba_dist.sum()
         
@@ -295,10 +283,8 @@ class BayesianTeacher:
         if self.learner_going_to_goal[goal_color, rf_idx]:
             return self.learner_greedy_policy(obj='goal', rf_idx=rf_idx, goal_color=goal_color)
         
-        # Nothing to do 
-        else:
-            # Action that maximizes the exploration
-            return self.learner_exploration_policy(goal_color, rf_idx)
+        # Nothing to do --> Action that maximizes the exploration
+        return self.learner_exploration_policy(goal_color, rf_idx)
         
     def update_knowledge(self, learner_pos: tuple, learner_dir: int, learner_step_count: int, rf_idx: int | None = None) -> None:
         self.learner_pos = learner_pos
@@ -315,8 +301,8 @@ class BayesianTeacher:
 
     def observe(self, action: int) -> None:
 
-        self.LOG.append(f'step t = {self.learner_step_count}')
-        self.LOG.append(f'true action a = {action}')
+        self.LOG.append(f'step t={self.learner_step_count}')
+        self.LOG.append(f'True action {action}')
         
         for rf_idx in range(self.num_rf):
             for goal_color in range(self.num_colors):
@@ -332,10 +318,14 @@ class BayesianTeacher:
         self.beliefs /= self.beliefs.sum()
         self.LOG.append(f'pred {list(np.around(self.beliefs, 4))}')
 
-    def predicted_reward(self, demo: list, goal_color: int, rf_idx: int) -> float: 
+    def predicted_reward(self, demo: list, goal_color: int, rf_idx: int) -> float:
+        current_receptve_field = self.env.agent_view_size
+
         # Reset env AND estimate beliefs of the learner
+        self.env.agent_view_size = self.rf_values[rf_idx]
         self.env.reset_grid()
         self.init_env(self.env)
+
         self.learner_step_count = 0
 
         if len(demo) > 0:
@@ -361,10 +351,35 @@ class BayesianTeacher:
             self.update_knowledge(self.env.agent_pos, self.env.agent_dir, self.env.step_count, rf_idx)
             
         # Reset env
+        self.env.agent_view_size = current_receptve_field
         self.env.reset_grid()
 
         # Return the predicted reward
         return reward
+    
+    def select_demo(self, cost_function: Callable[[int], float]=lambda x : 0.005 * x) -> list:
+        goal_color_belief = np.sum(self.beliefs, axis=1)
+        argmax_set = np.where(np.isclose(goal_color_belief, np.max(goal_color_belief)))[0]
+
+        pred_goal_color = np.random.choice(argmax_set)
+        demos = []
+        for rf in self.rf_values:
+            demo = generate_demo(self.env, rf, pred_goal_color)
+            demos.append(demo)
+
+        predicted_utility = []
+        for demo_idx,demo in enumerate(demos):
+            pred_u = 0
+            for rf_idx_demo, _ in enumerate(self.rf_values):
+                hat_r = self.predicted_reward(demo, pred_goal_color, rf_idx_demo)
+                cost = cost_function(len(demo))
+                pred_u += (hat_r - cost) * self.beliefs[pred_goal_color, rf_idx_demo]
+            predicted_utility.append(pred_u)
+
+        argmax_set = np.where(np.isclose(predicted_utility, np.max(predicted_utility)))[0]
+        demo_idx = np.random.choice(argmax_set)
+
+        return demos[demo_idx]
 ##          
 # Bayesian teacher that knows learner is using A* algo to compute the shortest path & active exploration
 ##
@@ -374,26 +389,36 @@ class AlignedBayesianTeacher:
     def __init__(self,
                  env: MultiGoalsEnv | MultiRoomsGoalsEnv,
                  num_colors: int=4,
-                 rf_values: np.ndarray=np.array([3,5,7,15]),
+                 rf_values: np.ndarray=np.array([3,5,7]),
                  Na: int=6
                  ) -> None:
         
-        self.env = env
         self.Na = Na
+        self.rf_values_basic = rf_values
 
         self.num_colors = num_colors
-        self.num_rf = len(rf_values)
-        self.rf_values = rf_values
-        self.gridsize = self.env.height
+        self.num_rf = len(rf_values) + 1
+        
+        # Init beliefs on the type of learner
+        self.beliefs = 1. / ( num_colors * len(rf_values)) * np.ones((num_colors, self.num_rf))
+        # Init env and learner beliefs about the env
+        self.init_env(env)
 
-        self.beliefs = 1. / ( num_colors * len(rf_values)) * np.ones((num_colors, len(rf_values)))
-        self.learner_beliefs = 1. / (2 + 2 * num_colors) * np.ones((len(rf_values), self.gridsize, self.gridsize, 2 + 2 * num_colors))
+        self.LOG = []
+
+    def init_env(self, env: MultiGoalsEnv | MultiRoomsGoalsEnv) -> None:
+        self.env = env
+        
+        self.gridsize = self.env.height
+        self.rf_values = np.concatenate((self.rf_values_basic, np.array([self.gridsize])))
+
+        self.learner_beliefs = 1. / (2 + 2 * self.num_colors) * np.ones((self.num_rf, self.gridsize, self.gridsize, 2 + 2 * self.num_colors))
 
         self.learner_queue_actions = {}
         self.learner_queue_transitions = {}
         self.learner_shortest_path_subgoal = {}
         self.learner_shortest_path_goal = {}
-        for goal_color in range(num_colors):
+        for goal_color in range(self.num_colors):
             self.learner_queue_actions[goal_color] = {}
             self.learner_queue_transitions[goal_color] = {}
             self.learner_shortest_path_subgoal[goal_color] = {}
@@ -413,30 +438,11 @@ class AlignedBayesianTeacher:
         
         self.learner_step_count = -1
 
-        self.LOG = []
-
-    def compute_learner_obs(self, receptive_field: int) -> np.ndarray:
-        
-        topX, topY, _, _ = get_view(self.learner_pos, self.learner_dir, receptive_field)
-        
-        grid = self.env.grid.slice(topX, topY, receptive_field, receptive_field)
-        for _ in range(self.learner_dir + 1):
-            grid = grid.rotate_left()
-
-        if self.env.see_through_walls:
-            vis_mask = np.ones(shape=(grid.width, grid.height), dtype=bool)
-        else:
-            vis_mask = grid.process_vis(agent_pos=(receptive_field // 2, receptive_field - 1))
-
-        obs = grid.encode(vis_mask)
-
-        return obs, vis_mask
-
     def update_learner_belief(self, rf_idx: int) -> None:
         
         receptive_field = self.rf_values[rf_idx]
 
-        obs, vis_mask = self.compute_learner_obs(receptive_field)
+        obs, vis_mask = compute_learner_obs(self.learner_pos, self.learner_dir, receptive_field, self.env)
 
         f_vec = DIR_TO_VEC[self.learner_dir]
         dir_vec = DIR_TO_VEC[self.learner_dir]
@@ -498,11 +504,15 @@ class AlignedBayesianTeacher:
             - r_vec * (receptive_field // 2)
         )
 
+        _, vis_mask = compute_learner_obs(pos, dir, receptive_field, self.env)
         exploration_score = 0
 
         # For each cell in the visibility mask
         for vis_j in range(0, receptive_field):
             for vis_i in range(0, receptive_field):
+
+                if not vis_mask[vis_i, vis_j]:
+                    continue
 
                 # Compute the world coordinates of this cell
                 abs_i, abs_j = top_left - (f_vec * vis_j) + (r_vec * vis_i)
@@ -516,8 +526,7 @@ class AlignedBayesianTeacher:
             
         return exploration_score
     
-    def learner_best_exploration_action(self,goal_color: int, rf_idx: int) -> int:
-        eps = 0.5
+    def learner_exploration_policy(self,goal_color: int, rf_idx: int) -> int:
         # Action that maximizes the exploration
         scores = np.zeros(3)
         # Turn left
@@ -539,9 +548,9 @@ class AlignedBayesianTeacher:
 
         argmax_set = np.where(np.isclose(scores, np.max(scores)))[0]
         
-        # eps = 0.5
+        self.LOG.append(f'scores {scores}')
+
         proba_dist = np.zeros(self.Na)
-        # proba_dist[np.array([0, 1, 2])] = eps
         proba_dist[argmax_set] = 1
         proba_dist /= proba_dist.sum()
         
@@ -724,21 +733,26 @@ class AlignedBayesianTeacher:
         # Nothing to do --> Action that maximizes the exploration
         if goal_color == 0:
             self.LOG.append(f'rf={receptive_field} Exploration')
-        return self.learner_best_exploration_action(goal_color, rf_idx)
+        return self.learner_exploration_policy(goal_color, rf_idx)
         
-    def update_knowledge(self, learner_pos: tuple, learner_dir: int, learner_step_count: int) -> None:
+    def update_knowledge(self, learner_pos: tuple, learner_dir: int, learner_step_count: int, rf_idx: int | None=None) -> None:
         self.learner_pos = learner_pos
         self.learner_dir = learner_dir
         self.learner_step_count += 1
         assert(self.learner_step_count == learner_step_count)
         
-        for rf_idx in range(self.num_rf):
-            # Update what the learner knows about the env
+        if rf_idx is None:
+            for rf_idx in range(self.num_rf):
+                # Update what the learner knows about the env
+                self.update_learner_belief(rf_idx)
+        else:
             self.update_learner_belief(rf_idx)
 
     def observe(self, action: int) -> None:
+
         self.LOG.append(f't={self.learner_step_count}')
         self.LOG.append(f'True action {action}')
+
         for rf_idx in range(self.num_rf):
             for goal_color in range(self.num_colors):
                 # Predict policy of the learner
@@ -748,15 +762,17 @@ class AlignedBayesianTeacher:
                 # Bayesian update
                 self.beliefs[goal_color, rf_idx] *= predicted_policy[action]
               
-
         self.beliefs /= self.beliefs.sum()
-
         self.LOG.append(list(self.beliefs.copy()))
 
-    def predicted_reward(self, demo: list, goal_color: int, rf_idx: int) -> float: 
+    def predicted_reward(self, demo: list, goal_color: int, rf_idx: int) -> float:
+        current_receptve_field = self.env.agent_view_size
+
         # Reset env AND estimate beliefs of the learner
+        self.env.agent_view_size = self.rf_values[rf_idx]
         self.env.reset_grid()
         self.init_env(self.env)
+
         self.learner_step_count = 0
 
         if len(demo) > 0:
@@ -780,10 +796,34 @@ class AlignedBayesianTeacher:
             action = Actions(a)
             _, reward, terminated, _, _ = self.env.step(action)
             self.update_knowledge(self.env.agent_pos, self.env.agent_dir, self.env.step_count, rf_idx)
-        
+            
         # Reset env
+        self.env.agent_view_size = current_receptve_field
         self.env.reset_grid()
-        
+
         # Return the predicted reward
         return reward
     
+    def select_demo(self, cost_function: Callable[[int], float]=lambda x : 0.005 * x) -> list:
+        goal_color_belief = np.sum(self.beliefs, axis=1)
+        argmax_set = np.where(np.isclose(goal_color_belief, np.max(goal_color_belief)))[0]
+
+        pred_goal_color = np.random.choice(argmax_set)
+        demos = []
+        for rf in self.rf_values:
+            demo = generate_demo(self.env, rf, pred_goal_color)
+            demos.append(demo)
+            
+        predicted_utility = []
+        for demo_idx,demo in enumerate(demos):
+            pred_u = 0
+            for rf_idx_demo, _ in enumerate(self.rf_values):
+                hat_r = self.predicted_reward(demo, pred_goal_color, rf_idx_demo)
+                cost = cost_function(len(demo))
+                pred_u += (hat_r - cost) * self.beliefs[pred_goal_color, rf_idx_demo]
+            predicted_utility.append(pred_u)
+
+        argmax_set = np.where(np.isclose(predicted_utility, np.max(predicted_utility)))[0]
+        demo_idx = np.random.choice(argmax_set)
+
+        return demos[demo_idx]
