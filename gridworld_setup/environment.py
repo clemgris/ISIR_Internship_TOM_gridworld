@@ -104,6 +104,11 @@ class MultiGoalsEnv(MiniGridEnv):
 
     def reset_grid(self):
 
+        if self.agent_view_size >= self.height:
+            self.see_through_walls = True
+        else:
+            self.see_through_walls = False
+
         self.carrying = None
         self.step_count = 0
 
@@ -267,6 +272,11 @@ class MultiRoomsGoalsEnv(MiniGridEnv):
         self.mission = "Open the door with the right color"
 
     def reset_grid(self):
+
+        if self.agent_view_size >= self.height:
+            self.see_through_walls = True
+        else:
+            self.see_through_walls = False
 
         self.carrying = None
         self.step_count = 0
