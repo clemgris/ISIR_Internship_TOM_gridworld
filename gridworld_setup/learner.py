@@ -339,6 +339,8 @@ class BayesianLearner:
         else:
             scores[2] = self.compute_exploration_score(dir=self.env.agent_dir, pos=next_pos)
         argmax_set = np.where(np.isclose(scores, np.max(scores)))[0]
+        
+        self.LOG.append(f'scores {scores}')
 
         # If actions better than the others
         if len(argmax_set) < 3 or forced:
@@ -544,7 +546,7 @@ class BayesianLearner:
             self.pos.append(self.env.agent_pos)
 
         # Reset learner init pos
-        self.env.reset_agent_pos()
+        self.env.reset_grid()
 ##
 # Learner that plans multiple position transitions (sequence planning)
 ##
