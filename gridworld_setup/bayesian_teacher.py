@@ -357,7 +357,7 @@ class BayesianTeacher:
         # Return the predicted reward
         return reward
     
-    def select_demo(self, cost_function: Callable[[int], float]=lambda x : 0.005 * x) -> list:
+    def select_demo(self, cost_function: Callable[[int], float]=lambda x : 0.002 * x) -> list:
         goal_color_belief = np.sum(self.beliefs, axis=1)
         argmax_set = np.where(np.isclose(goal_color_belief, np.max(goal_color_belief)))[0]
 
@@ -379,7 +379,9 @@ class BayesianTeacher:
         argmax_set = np.where(np.isclose(predicted_utility, np.max(predicted_utility)))[0]
         demo_idx = np.random.choice(argmax_set)
 
-        return demos[demo_idx]
+        predicted_best_utility = np.meax(predicted_utility)
+
+        return demos[demo_idx], demo_idx, predicted_best_utility, demos
 ##          
 # Bayesian teacher that knows learner is using A* algo to compute the shortest path & active exploration
 ##
@@ -804,7 +806,7 @@ class AlignedBayesianTeacher:
         # Return the predicted reward
         return reward
     
-    def select_demo(self, cost_function: Callable[[int], float]=lambda x : 0.005 * x) -> list:
+    def select_demo(self, cost_function: Callable[[int], float]=lambda x : 0.002 * x) -> list:
         goal_color_belief = np.sum(self.beliefs, axis=1)
         argmax_set = np.where(np.isclose(goal_color_belief, np.max(goal_color_belief)))[0]
 
@@ -826,4 +828,6 @@ class AlignedBayesianTeacher:
         argmax_set = np.where(np.isclose(predicted_utility, np.max(predicted_utility)))[0]
         demo_idx = np.random.choice(argmax_set)
 
-        return demos[demo_idx]
+        predicted_best_utility = np.meax(predicted_utility)
+
+        return demos[demo_idx], demo_idx, predicted_best_utility, demos
