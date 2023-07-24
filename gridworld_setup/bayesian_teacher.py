@@ -379,7 +379,7 @@ class BayesianTeacher:
         argmax_set = np.where(np.isclose(predicted_utility, np.max(predicted_utility)))[0]
         demo_idx = np.random.choice(argmax_set)
 
-        predicted_best_utility = np.meax(predicted_utility)
+        predicted_best_utility = np.max(predicted_utility)
 
         return demos[demo_idx], demo_idx, predicted_best_utility, demos
 ##          
@@ -828,6 +828,6 @@ class AlignedBayesianTeacher:
         argmax_set = np.where(np.isclose(predicted_utility, np.max(predicted_utility)))[0]
         demo_idx = np.random.choice(argmax_set)
 
-        predicted_best_utility = np.meax(predicted_utility)
+        predicted_best_utility = np.max(predicted_utility)
 
         return demos[demo_idx], demo_idx, predicted_best_utility, demos
