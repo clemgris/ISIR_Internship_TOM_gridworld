@@ -415,3 +415,16 @@ def display_all_ToM(lamd_values: list, grid_size_values: list,
     plt.title('Mean RF-inference accuracy per Boltzmann temperature parameter $\lambda$')
     plt.legend()
     plt.legend(loc=2);
+
+def display_cost(cost_fun):
+    fig = plt.figure(figsize=(10,5))
+
+    for l in [20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80]:
+        X = np.arange(0,20)
+        Y = cost_fun(X, l)
+        plt.scatter(X, Y, label=f'l_max={l}')
+
+    plt.title(f'{cost_fun.__name__} cost function \n alpha={alpha}')
+    plt.ylabel('cost')
+    plt.xlabel('delta_d')
+    plt.legend();
