@@ -1,7 +1,7 @@
 import numpy as np
 from queue import SimpleQueue
 from minigrid.core.actions import Actions
-from minigrid.core.constants import DIR_TO_VEC
+from minigrid.core.constants import DIR_TO_VEC, OBJECT_TO_IDX
 from PIL import Image
 
 from environment import MultiGoalsEnv, MultiRoomsGoalsEnv
@@ -19,9 +19,12 @@ class BayesianLearner:
                  num_colors: int=4,
                  save_render: bool=False,
                  max_steps: int | None = None,
-                 env_type: str='MultiGoalsEnv'
+                 env_type: str='MultiGoalsEnv',
+                 render_mode: str | None="rgb_array"
                  ) -> None:
         
+        self.render_mode = render_mode
+
         self.env_type = env_type
         self.grid_size = grid_size
         self.goal_color = goal_color + 1
@@ -84,7 +87,7 @@ class BayesianLearner:
         agent_start_dir = 3 # np.random.randint(0, 4)
 
         if self.env_type == 'MultiGoalsEnv':
-            self.env = MultiGoalsEnv(render_mode = "rgb_array",
+            self.env = MultiGoalsEnv(render_mode = self.render_mode,
                                     agent_goal=self.goal_color,
                                     size=grid_size,
                                     agent_start_pos=agent_start_pos,
@@ -93,7 +96,7 @@ class BayesianLearner:
                                     num_colors=num_colors,
                                     max_steps=self.max_steps)
         elif self.env_type == 'MultiRoomsGoalsEnv':
-            self.env = MultiRoomsGoalsEnv(render_mode = "rgb_array",
+            self.env = MultiRoomsGoalsEnv(render_mode = self.render_mode,
                         agent_goal=self.goal_color,
                         size=grid_size,
                         agent_start_pos=agent_start_pos,
@@ -516,9 +519,9 @@ class BayesianLearner:
         # Nothing to do
         self.LOG.append('Active exploration')
         # Action that maximizes the exploration
-        return self.active_exploration_policy()
+        return self.active_exploration_policy(forced=True)
     
-    def observe(self, traj: list) -> None:
+    def observe(self, traj: list, render_mode: str | None="rgb_array") -> None:
         if len(traj) > 0:
             # Add first unused action to get the first observation
             demo = [4] + traj
@@ -533,17 +536,25 @@ class BayesianLearner:
         self.render_frames_observation = []
         self.render_beliefs_observation = []
         self.pos = []
+
+        vis_mask = np.ones((self.grid_size, self.grid_size))
         # Follow traj and update beliefs
         for a in demo:
+            # For rendering
+            if render_mode == "rgb_array":
+                self.render_frames_observation.append(self.env.render())
+                beliefs_image = Shannon_entropy(self.beliefs, axis=2) / (Shannon_entropy( 1 / 4 * np.ones(4)) + 0.2)
+                self.render_beliefs_observation.append(beliefs_image.T)
+            else:
+                grid = self.env.grid.slice(0, 0, self.grid_size, self.grid_size)
+                image = grid.encode(vis_mask)
+                image[self.env.agent_pos[0], self.env.agent_pos[1]] = np.array([OBJECT_TO_IDX['agent'], 0 , 0])
+                self.render_frames_observation.append(image)
+            self.pos.append(self.env.agent_pos)
+
             action = Actions(a)
             obs, _, _, _, _ = self.env.step(action)
             self.update_beliefs(obs['image'])
-
-            # For rendering
-            self.render_frames_observation.append(self.env.render())
-            beliefs_image = Shannon_entropy(self.beliefs, axis=2) / (Shannon_entropy( 1 / 4 * np.ones(4)) + 0.2)
-            self.render_beliefs_observation.append(beliefs_image.T)
-            self.pos.append(self.env.agent_pos)
 
         # Reset learner init pos
         self.env.reset_grid()
