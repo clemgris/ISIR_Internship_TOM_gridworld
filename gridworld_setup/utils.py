@@ -1,4 +1,5 @@
 import numpy as np
+import os
 from minigrid.core.constants import DIR_TO_VEC
 from minigrid.core.actions import Actions
 
@@ -6,6 +7,13 @@ from environment import MultiGoalsEnv, MultiRoomsGoalsEnv
 
 from queue import PriorityQueue
 import heapq
+
+def make_dirs(path):
+    try:
+        os.makedirs(path)
+    except OSError:
+        if not os.path.isdir(path):
+            raise
 
 def draw(proba_dist: np.array) -> int:
     assert(np.isclose(proba_dist.sum(), 1.))
@@ -402,3 +410,14 @@ def compute_opt_length(env: MultiGoalsEnv, goal_color: int):
     env.reset_grid()
 
     return length_opt_path
+
+# Cost functions
+
+def norm_linear_cost(x, l, alpha=0.15):
+    return alpha * (1 - x/l)
+
+def linear(x, l, alpha=0.002):
+    return alpha * (l-x) 
+
+def exp_cost(x, l, alpha=0.3):
+    return alpha * (np.exp( - x * alpha) - np.exp(-l * alpha))
