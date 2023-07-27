@@ -357,7 +357,7 @@ class BayesianTeacher:
         # Return the predicted reward
         return reward
     
-    def select_demo(self, cost_function: Callable[[int], float]=lambda x : 0.002 * x) -> list:
+    def select_demo(self, cost_function: Callable[[int, int], float]=lambda x, l : exp_cost(x, l, alpha=0.3)) -> list:
         goal_color_belief = np.sum(self.beliefs, axis=1)
         argmax_set = np.where(np.isclose(goal_color_belief, np.max(goal_color_belief)))[0]
 
@@ -367,12 +367,14 @@ class BayesianTeacher:
             demo = generate_demo(self.env, rf, pred_goal_color)
             demos.append(demo)
 
+        l_max = np.max([len(demo) for demo in demos])
+
         predicted_utility = []
         for demo_idx,demo in enumerate(demos):
             pred_u = 0
             for rf_idx_demo, _ in enumerate(self.rf_values):
                 hat_r = self.predicted_reward(demo, pred_goal_color, rf_idx_demo)
-                cost = cost_function(len(demo))
+                cost = cost_function(len(demo), l_max)
                 pred_u += (hat_r - cost) * self.beliefs[pred_goal_color, rf_idx_demo]
             predicted_utility.append(pred_u)
 
@@ -806,7 +808,7 @@ class AlignedBayesianTeacher:
         # Return the predicted reward
         return reward
     
-    def select_demo(self, cost_function: Callable[[int], float]=lambda x : 0.002 * x) -> list:
+    def select_demo(self, cost_function: Callable[[int, int], float]=lambda x, l : exp_cost(x, l, alpha=0.3)) -> list:
         goal_color_belief = np.sum(self.beliefs, axis=1)
         argmax_set = np.where(np.isclose(goal_color_belief, np.max(goal_color_belief)))[0]
 
@@ -815,13 +817,15 @@ class AlignedBayesianTeacher:
         for rf in self.rf_values:
             demo = generate_demo(self.env, rf, pred_goal_color)
             demos.append(demo)
+
+        l_max = np.max([len(demo) for demo in demos])
             
         predicted_utility = []
         for demo_idx,demo in enumerate(demos):
             pred_u = 0
             for rf_idx_demo, _ in enumerate(self.rf_values):
                 hat_r = self.predicted_reward(demo, pred_goal_color, rf_idx_demo)
-                cost = cost_function(len(demo))
+                cost = cost_function(len(demo), l_max)
                 pred_u += (hat_r - cost) * self.beliefs[pred_goal_color, rf_idx_demo]
             predicted_utility.append(pred_u)
 
