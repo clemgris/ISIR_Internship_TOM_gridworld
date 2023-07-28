@@ -90,7 +90,10 @@ class CharNet(nn.Module):
 
     def forward(self, obs: torch.tensor) -> torch.tensor:
         # obs: [batch, num_past, num_step, H, W, channel]
-        print('obs', obs.shape)
+        # print('obs', obs.shape)
+        if len(obs.shape) == 5:
+            obs = obs.unsqueeze(1)
+        # print('obs', obs.shape)
         obs = obs.permute(0, 1, 2, 5, 3, 4) # [batch, num_past, num_step, channel, H, W]
         batch_size, num_past, num_step, num_channel, H, W = obs.shape
         
@@ -99,18 +102,18 @@ class CharNet(nn.Module):
             prev_h = self.init_hidden(batch_size)
 
             obs_past = obs[:, p] # [batch, num_step, channel, H, W]
-            print(f'obs past {obs_past.shape} [batch, num_step, channel, H, W]')
+            # print(f'obs past {obs_past.shape} [batch, num_step, channel, H, W]')
             obs_past = obs_past.permute(1, 0, 2, 3, 4) # [num_step, batch, channel, H, W]
             obs_past = obs_past.reshape(-1, num_channel, H, W) # [batch * num_step, channel, H, W]
-            print(f'obs_past {obs_past.shape} [batch * num_step, channel, H, W]')
+            # print(f'obs_past {obs_past.shape} [batch * num_step, channel, H, W]')
 
             x = self.encoder(obs_past.double())
-            print(f'x {x.shape}')
+            # print(f'x {x.shape}')
 
             x = x.view(num_step, batch_size, -1) # [num_step, batch, output]
             outs, _ = self.lstm(x, prev_h)
             outs = outs.permute(1, 0, 2) # [batch, num_step, output]
-            print(f' outs {outs.shape} [batch, num_step, output]')
+            # print(f' outs {outs.shape} [batch, num_step, output]')
             
             # Mask outputs from zero-padding
             padded_obs_past = obs[:, p].reshape(batch_size, num_step, -1)
@@ -118,10 +121,10 @@ class CharNet(nn.Module):
             mask = mask.unsqueeze(-1)
             mask = mask.expand(-1, -1, outs.shape[-1])
             outs = outs * mask # [batch, num_step, output]
-            print(f'outs {outs.shape} [batch, num_step, output]')
+            # print(f'outs {outs.shape} [batch, num_step, output]')
             
             outs = outs.reshape(batch_size, -1) # [batch, num_step * output]
-            print(f'outs {outs.shape} [batch, num_step * output]')
+            # print(f'outs {outs.shape} [batch, num_step * output]')
             e_char_sum = self.fc_final(outs) # [batch, output]
             past_e_char.append(e_char_sum)
 
@@ -165,37 +168,37 @@ class MentalNet(nn.Module):
     def forward(self, obs: torch.tensor) -> torch.tensor:
         # obs: [batch, num_step, H, W, channel]
         init_obs = obs
-        print(f'obs {obs.shape} [batch, num_step, H, W, channel]')
+        # print(f'obs {obs.shape} [batch, num_step, H, W, channel]')
         obs = obs.permute(0, 1, 4, 2, 3) # [batch, num_step, channel, H, W]
-        print(f'obs {obs.shape} [batch, num_step, channel, H, W]')
+        # print(f'obs {obs.shape} [batch, num_step, channel, H, W]')
         batch_size, num_step, num_channel, H, W = obs.shape
 
         obs = obs.reshape(-1, num_channel, H, W) # [batch * num_step, channel, H, W]
-        print(f'obs {obs.shape} [num_step * batch, channel, H, W]')
+        # print(f'obs {obs.shape} [num_step * batch, channel, H, W]')
         
         x = self.encoder(obs.double())
-        print(f'x {x.shape} [batch * num_step, output, H, W]')
+        # print(f'x {x.shape} [batch * num_step, output, H, W]')
 
         x = x.reshape(batch_size, num_step, -1, H, W) # [batch, num_step, ouput, H, W]
-        print(f'x {x.shape} [batch, num_step, output, H, W]')
+        # print(f'x {x.shape} [batch, num_step, output, H, W]')
 
         outs, _ = self.convlstm(x) # [batch, num_step, ouput, H, W] ## WARNING MEMORY SPACE!!
-        print(f'outs {outs.shape} ??')
+        # print(f'outs {outs.shape} ??')
 
         # Mask outputs from zero-padding
         padded_obs = init_obs.reshape(batch_size, num_step, -1)
         mask = torch.any(padded_obs != 0, dim=-1).double()
-        print(f'mask {mask.shape}')
+        # print(f'mask {mask.shape}')
         mask = mask.unsqueeze(-1).unsqueeze(-1).unsqueeze(-1)
         mask = mask.expand(-1, -1, 32, outs.size(3), outs.size(4))
-        print(torch.any(mask != 1.))
+        # print(torch.any(mask != 1.))
         outs = outs * mask
 
         outs = outs.reshape(batch_size, -1, H, W) # [batch, num_step * output, H, W]
         
         # Last conv
         outs = self.last_conv(outs) # [batch, output, H, W]
-        print('final shape', outs.shape)
+        # print('final shape', outs.shape)
         e_mental = self.relu(outs)
         
         return e_mental
@@ -261,15 +264,15 @@ class PredNet(nn.Module):
         batch_size, H, W, num_channel = query_state.shape
     
         # Past traj
-        _, num_past, _, _, _, _ = past_traj.shape
+        num_past = past_traj.shape[1]
         if num_past == 0:
             e_char = torch.zeros((batch_size, self.num_output_char, H, W, num_channel), device=self.device)
         else:
             e_char = self.charnet(past_traj)
-            print('echar after model', e_char.shape)
+            # print('echar after model', e_char.shape)
             e_char_concat = e_char[..., None, None]
             e_char_concat = e_char_concat.repeat(1, 1, H, W) # [batch, num_output_char, H, W]
-            print('echar after model', e_char.shape)
+            # print('echar after model', e_char.shape)
 
 
         # Current traj
@@ -282,7 +285,7 @@ class PredNet(nn.Module):
 
         query_state_concat = query_state.permute(0, 3, 1, 2)
 
-        print(e_char_concat.shape, e_mental_concat.shape, query_state_concat.shape)
+        # print(e_char_concat.shape, e_mental_concat.shape, query_state_concat.shape)
         x_concat = torch.cat([e_char_concat, e_mental_concat, query_state_concat], axis=1) # [batch, num_output_char + num_output_mental + num_channel, H, W, num_channel]
 
         x = self.encoder(x_concat)
@@ -335,7 +338,7 @@ class PredNet(nn.Module):
 
             with torch.no_grad():
 
-                past_traj, current_traj, query_state, target_action, true_idx_music = batch
+                past_traj, current_traj, query_state, target_action = batch
                 
                 past_traj = past_traj.float().to(self.device)
                 current_traj = current_traj.float().to(self.device)
