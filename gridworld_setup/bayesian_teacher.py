@@ -360,7 +360,6 @@ class BayesianTeacher:
     def select_demo(self, cost_function: Callable[[int, int], float]=lambda x, l : exp_cost(x, l, alpha=0.3)) -> list:
         goal_color_belief = np.sum(self.beliefs, axis=1)
         argmax_set = np.where(np.isclose(goal_color_belief, np.max(goal_color_belief)))[0]
-
         pred_goal_color = np.random.choice(argmax_set)
         demos = []
         for rf in self.rf_values:
@@ -546,7 +545,7 @@ class AlignedBayesianTeacher:
 
         if not (np.all(self.learner_beliefs[rf_idx, next_pos[0], next_pos[1], :] == one_hot_empty) or \
             np.all(self.learner_beliefs[rf_idx, next_pos[0], next_pos[1], :] == one_hot_subgoal)): # Obstacle in front
-            scores[2] = 0.
+            scores[2] = -1.
         else:
             scores[2] = self.compute_exploration_score(self.learner_dir, next_pos, rf_idx=rf_idx)
 
@@ -811,7 +810,6 @@ class AlignedBayesianTeacher:
     def select_demo(self, cost_function: Callable[[int, int], float]=lambda x, l : exp_cost(x, l, alpha=0.3)) -> list:
         goal_color_belief = np.sum(self.beliefs, axis=1)
         argmax_set = np.where(np.isclose(goal_color_belief, np.max(goal_color_belief)))[0]
-
         pred_goal_color = np.random.choice(argmax_set)
         demos = []
         for rf in self.rf_values:

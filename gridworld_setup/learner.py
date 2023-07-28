@@ -338,9 +338,10 @@ class BayesianLearner:
         next_pos = self.env.agent_pos + DIR_TO_VEC[self.env.agent_dir]
         if np.all(self.beliefs[next_pos[0], next_pos[1], :] == np.array([0, 1, 0, 0])) or \
             np.all(self.beliefs[next_pos[0], next_pos[1], :] == np.array([0, 0, 1, 0])): # Obstacle in front
-            scores[2] = 0.
+            scores[2] = -1.
         else:
             scores[2] = self.compute_exploration_score(dir=self.env.agent_dir, pos=next_pos)
+
         argmax_set = np.where(np.isclose(scores, np.max(scores)))[0]
         
         self.LOG.append(f'scores {scores}')
