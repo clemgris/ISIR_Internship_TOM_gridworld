@@ -53,7 +53,7 @@ def plot_error_episode_length(colors: np.ndarray, rf_values: list, num_colors: i
             all_length += dict[receptive_field][goal_color]['length']
             all_accuracy += dict[receptive_field][goal_color]['accuracy']['rf']
 
-        bins = np.arange(0, (np.max(all_length) // 20 + 1) * 20 + 1, 20)
+        bins = list(np.arange(0, (1000 // 40 + 1) * 20 + 1, 40)) + [np.max(all_length)]
 
         mean_accuracy = []
         std_accuracy = []
@@ -349,12 +349,12 @@ def display_ToM_errorbar(load_filename: str, save_filename: str, lambd: float,
             all_acc = []
             for goal_color in range(num_colors):
                 all_acc += dict[rf][goal_color]['accuracy']['rf']
-            if ii == 5:
+            if ii == len(grid_size_values)-1:
                 plt.errorbar(ii, np.mean(all_acc), yerr=1.96 * np.std(all_acc) / (np.sqrt(len(all_acc))), color=colors[rf_idx], fmt="o", label=f'rf={labels[rf_idx]}')
             else:
                 plt.errorbar(ii, np.mean(all_acc), yerr=1.96 * np.std(all_acc) / (np.sqrt(len(all_acc))), color=colors[rf_idx], fmt="o")
                 
-    plt.plot([0, 5], [1, 1], label='Max', ls='--', c='k')
+    plt.plot([0, len(grid_size_values)-1], [1, 1], label='Max', ls='--', c='k')
     plt.xticks(np.arange(len(grid_size_values)), grid_size_values)
     plt.xlabel('Grid size')
     plt.ylabel('Accuracy (MAP)')
@@ -365,16 +365,16 @@ def display_ToM_errorbar(load_filename: str, save_filename: str, lambd: float,
     fig.savefig(save_filename);
 
 
-def display_all_ToM(lamd_values: list, grid_size_values: list, 
+def display_all_ToM(date: str, lamd_values: list, grid_size_values: list, 
                     rf_values_basic: list=[3,5,7], num_colors: int=4) -> None:
     markers = ['*', '^', 'o', 's', 'd', 'h', 'x', 'v']
     colors = ['gold', 'orange', 'orangered', 'magenta', 'purple', 'blue', 'seagreen', 'slategrey']
 
 
-    plt.figure(figsize=(15,6))
+    plt.figure(figsize=(10,6))
 
     for kk, lambd in enumerate(lamd_values):
-        with open(f'./stats/lambda_{lambd}/stats_outputs_lambd_{lambd}.pickle', 'rb') as f:
+        with open(f'./stats/{date}/lambda_{lambd}/stats_outputs_lambd_{lambd}.pickle', 'rb') as f:
             DICT = pickle.load(f)
         for ii,GRID_SIZE in enumerate(grid_size_values):
             dict = DICT[GRID_SIZE]
@@ -385,12 +385,12 @@ def display_all_ToM(lamd_values: list, grid_size_values: list,
             for rf_idx, rf in enumerate(rf_values):
                 for goal_color in range(num_colors):
                     all_acc += dict[rf][goal_color]['accuracy']['rf']
-            if ii == 5:
+            if ii == len(grid_size_values)-1:
                 plt.errorbar(ii, np.mean(all_acc), yerr=1.96 * np.std(all_acc) / np.sqrt(len(all_acc)), color=colors[kk], fmt=markers[kk], label=f'$\lambda$={lambd}')
             else:
                 plt.errorbar(ii, np.mean(all_acc), yerr=1.96 * np.std(all_acc) / np.sqrt(len(all_acc)), color=colors[kk], fmt=markers[kk])
 
-    with open(f'./stats/aligned/stats_outputs_aligned.pickle', 'rb') as f:
+    with open(f'./stats/{date}/aligned/stats_outputs_aligned.pickle', 'rb') as f:
         DICT = pickle.load(f)
 
     kk += 1
@@ -403,14 +403,14 @@ def display_all_ToM(lamd_values: list, grid_size_values: list,
         for rf_idx, rf in enumerate(rf_values):
             for goal_color in range(num_colors):
                 all_acc += dict[rf][goal_color]['accuracy']['rf']
-        if ii == 5:
+        if ii == len(grid_size_values)-1:
             plt.errorbar(ii, np.mean(all_acc), yerr=1.96 * np.std(all_acc) / np.sqrt(len(all_acc)), color=colors[kk], fmt=markers[kk], label=f'Aligned')
         else:
             plt.errorbar(ii, np.mean(all_acc), yerr=1.96 * np.std(all_acc) / np.sqrt(len(all_acc)), color=colors[kk], fmt=markers[kk])
 
     plt.plot([0, len(grid_size_values)-1], [1, 1], ls='--', label='Max', c='k')
     plt.xticks(np.arange(len(grid_size_values)), grid_size_values)
-    plt.xlabel('Grid size')
+    plt.xlabel('Grid size of the observation environment')
     plt.ylabel('RF-inference accuracy (MAP)')
     plt.title('Mean RF-inference accuracy per Boltzmann temperature parameter $\lambda$')
     plt.legend()
