@@ -21,8 +21,8 @@ nb_epoch = [100]
 for epoch in nb_epoch:
     for bs in batch_size:
     
-        config = '_nbepoch_' + str(epoch) + '_bs_' + str(bs) 
-        run_directory = job_directory + str(time.ctime()) + config + '/'
+        config = f'_nbepoch_{epoch}_bs_{bs}'
+        run_directory = job_directory + str(time.ctime()) + config + '_multigpu/'
         run_directory = run_directory.replace(' ', '_').replace('.', '-').replace(':', '__')
         mkdir_p(run_directory)
 

@@ -14,14 +14,14 @@ job_directory = "%s/results/" % os.getcwd()
 # Make top level directories
 mkdir_p(job_directory)
 
-batch_size = [3, 5]
+batch_size = [2]
 nb_epoch = [100] 
 
 
 for epoch in nb_epoch:
     for bs in batch_size:
     
-        config = '_nbepoch_' + str(epoch) + '_bs_' + str(bs) 
+        config = f'_nbepoch_{epoch}_bs_{bs}'
         run_directory = job_directory + str(time.ctime()) + config + '/'
         run_directory = run_directory.replace(' ', '_').replace('.', '-').replace(':', '__')
         mkdir_p(run_directory)
