@@ -63,8 +63,8 @@ if __name__ == '__main__':
 
     # Set the zero-padding --> model's size
     max_length_obs = grid_size * grid_size
-    max_length_demo_eval = grid_size_demo // 2 * 10 + grid_size_demo * grid_size_demo // 2
-    
+    max_length_demo_eval = grid_size_demo * 2 + grid_size_demo * grid_size_demo // 2
+
     print(f'Maximal length on obs env: {max_length_obs}')
     print(f'Maximal length on demo env (demo + eval): {max_length_demo_eval} \n')
 
