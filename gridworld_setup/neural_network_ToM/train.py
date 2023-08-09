@@ -12,7 +12,12 @@ from dataset import ToMNetDataset
 from torch.utils.data import DataLoader
 
 import sys
-sys.path.append('/home/chetouani/Documents/STAGE_Clemence/ISIR_internship_ToM_gridworld/gridworld_setup')
+
+global_path = '/home/chetouani/Documents/STAGE_Clemence/ISIR_internship_ToM_gridworld/gridworld_setup'
+# global_path = '/gpfswork/rech/kcr/uxv44vw/clemence/ISIR_internship_ToM_gridworld/gridworld_setup'
+
+sys.path.append('.')
+sys.path.append('./../')
 
 from utils import make_dirs
 
@@ -33,7 +38,7 @@ def parse_args():
 if __name__ == '__main__':
     args = parse_args()
 
-    loading_path = f'/home/chetouani/Documents/STAGE_Clemence/ISIR_internship_ToM_gridworld/gridworld_setup/neural_network_ToM/data/{args.data_filename}'
+    loading_path = f'{global_path}/neural_network_ToM/data/{args.data_filename}'
     config = json.load(open(os.path.join(loading_path, 'dataset_config.json')))
 
     if args.device is None:
@@ -53,7 +58,7 @@ if __name__ == '__main__':
 
     # Set the zero-padding --> model's size
     max_length_obs = grid_size * grid_size
-    max_length_demo_eval = grid_size_demo // 2 * 100 + grid_size_demo * grid_size_demo // 2
+    max_length_demo_eval = grid_size_demo // 2 * 10 + grid_size_demo * grid_size_demo // 2
 
     print(f'Maximal length on obs env: {max_length_obs}')
     print(f'Maximal length on demo env (demo + eval): {max_length_demo_eval} \n')
