@@ -54,7 +54,7 @@ for epoch in nb_epoch:
             fh.writelines(
                 "#SBATCH -C v100-32g\n")
             fh.writelines(
-                "#SBATCH --time=0:59:59\n")
+                "#SBATCH --time=00:59:59\n")
             fh.writelines(
                 "#SBATCH --gres=gpu:4\n")
                 
