@@ -1,8 +1,8 @@
 import json
 import os
 
-global_path = '/home/chetouani/Documents/STAGE_Clemence/ISIR_internship_ToM_gridworld/gridworld_setup'
-# global_path = '/gpfswork/rech/kcr/uxv44vw/clemence/ISIR_internship_ToM_gridworld/gridworld_setup'
+# global_path = '/home/chetouani/Documents/STAGE_Clemence/ISIR_internship_ToM_gridworld/gridworld_setup'
+global_path = '/gpfswork/rech/kcr/uxv44vw/clemence/ISIR_internship_ToM_gridworld/gridworld_setup'
 
 path = f'{global_path}/neural_network_ToM'
 
