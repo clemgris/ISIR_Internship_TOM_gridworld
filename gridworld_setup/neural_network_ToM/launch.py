@@ -65,7 +65,7 @@ for epoch in nb_epoch:
                 "set -x\n")
 
             fh.writelines(
-                "srun bash -c 'python neural_network_ToM/train.py -e {} -b {}'".format(epoch, bs))
+                "srun bash -c 'python train.py -e {} -b {}'".format(epoch, bs))
 
         os.system("sbatch %s" % job_file)
         sleep(1)

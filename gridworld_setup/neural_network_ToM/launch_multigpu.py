@@ -68,7 +68,7 @@ for epoch in nb_epoch:
                 "python idr_accelerate.py\n")
 
             fh.writelines(
-                f"srun bash -c 'accelerate launch --config_file ./config_accelerate_rank${{SLURM_PROCID}}.yaml neural_network_ToM/train_multigpu.py -e {epoch} -b {bs}'")
+                f"srun bash -c 'accelerate launch --config_file ./config_accelerate_rank${{SLURM_PROCID}}.yaml train_multigpu.py -e {epoch} -b {bs}'")
 
         os.system("sbatch %s" % job_file)
         sleep(1)
