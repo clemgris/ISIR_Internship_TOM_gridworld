@@ -6,7 +6,8 @@ from tqdm import trange
 import warnings
 
 import sys
-sys.path.append('/home/chetouani/Documents/STAGE_Clemence/ISIR_internship_ToM_gridworld/gridworld_setup')
+sys.path.append('.')
+sys.path.append('./../')
 
 from learner import BayesianLearner
 from utils import *

@@ -4,8 +4,8 @@ import torch.nn.functional as F
 from tqdm import tqdm
 
 import sys
-sys.path.append('/home/chetouani/Documents/STAGE_Clemence/ISIR_internship_ToM_gridworld/gridworld_setup')
-sys.path.append('/home/chetouani/Documents/STAGE_Clemence/ISIR_internship_ToM_gridworld/gridworld_setup/neural_network_ToM')
+sys.path.append('./../')
+sys.path.append('.')
 
 from convLSTM import ConvLSTM
 
@@ -296,7 +296,6 @@ class PredNet(nn.Module):
     def train(self, data_loader: DataLoader, optim: Optimizer) -> dict:
         tot_loss = 0
         action_acc = 0
-        metric = 0
 
         criterion_nll = nn.NLLLoss()
 
