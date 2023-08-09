@@ -50,11 +50,11 @@ for epoch in nb_epoch:
             fh.writelines(
                 "#SBATCH --account=kcr@v100\n")
             fh.writelines(
-                "#SBATCH --qos=qos_gpu-t3\n")
+                "#SBATCH --qos=qos_gpu-dev\n")
             fh.writelines(
                 "#SBATCH -C v100-32g\n")
             fh.writelines(
-                "#SBATCH --time=19:59:59\n")
+                "#SBATCH --time=0:59:59\n")
             fh.writelines(
                 "#SBATCH --gres=gpu:4\n")
                 
