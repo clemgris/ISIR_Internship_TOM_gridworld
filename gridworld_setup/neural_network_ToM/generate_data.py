@@ -17,16 +17,15 @@ warnings.filterwarnings("ignore", category=RuntimeWarning)
 
 def parse_args():
     parser = argparse.ArgumentParser('Generate data to train ToMNet model')
-    parser.add_argument('--num_train', '-n_train', type=int, default=1000),
-    parser.add_argument('--num_val', '-n_val', type=int, default=1000),
-    parser.add_argument('--num_test', '-n_test', type=int, default=1000),
+    parser.add_argument('--num_train', '-n_train', type=int, default=100),
+    parser.add_argument('--num_val', '-n_val', type=int, default=100),
+    parser.add_argument('--num_test', '-n_test', type=int, default=10),
     parser.add_argument('--start_idx', '-start', type=int, default=0),
     parser.add_argument('--save_folder', '-save', type=str, default='./neural_network_ToM/data'),
-    parser.add_argument('--grid_size', '-gs', type=int, default=21),
+    parser.add_argument('--grid_size', '-gs', type=int, default=15),
     parser.add_argument('--grid_size_demo', '-gs_demo', type=int, default=45),
     parser.add_argument('--rf_values_basic', '-rf_val', type=list, default=[3,5,7]),
-    parser.add_argument('--num_colors', '-nc', type=int, default=4),
-    parser.add_argument('--max_steps_demo_env', '-max', type=int, default=77)
+    parser.add_argument('--num_colors', '-nc', type=int, default=4)
     args = parser.parse_args()
     return args
 
@@ -40,8 +39,7 @@ if __name__ == '__main__':
                        GRID_SIZE_DEMO = args.grid_size_demo,
                        rf_values_basic = args.rf_values_basic,
                        start_idx = args.start_idx,
-                       num_colors=args.num_colors,
-                       max_steps_demo_env=args.max_steps_demo_env)
+                       num_colors=args.num_colors)
     
     date = datetime.now().strftime("%m.%d.%Y")
     make_dirs(f'{args.save_folder}/dataset_{date}')
