@@ -20,17 +20,19 @@ class BayesianTeacher:
                  num_colors: int=4,
                  rf_values: np.ndarray=np.array([3,5,7]),
                  Na: int=6,
-                 lambd: float=0.5
+                 lambd: float=0.5,
+                 add_full_obs: bool=True
                  ) -> None:
         
         self.Na = Na
         self.rf_values_basic = rf_values
+        self.add_full_obs = add_full_obs
 
         # Boltzmann temperature parameter (confidence in greedy)
         self.lambd = lambd
 
         self.num_colors = num_colors
-        self.num_rf = len(rf_values) + 1
+        self.num_rf = len(rf_values) + 1 if self.add_full_obs else len(rf_values)
         
         # Init beliefs on the type of learner
         self.beliefs = 1. / ( num_colors * len(rf_values)) * np.ones((num_colors, self.num_rf))
@@ -42,7 +44,10 @@ class BayesianTeacher:
     def init_env(self, env: MultiGoalsEnv | MultiRoomsGoalsEnv) -> None:
         self.env = env
         self.gridsize = self.env.height
-        self.rf_values = self.rf_values = np.concatenate((self.rf_values_basic, np.array([self.gridsize])))
+        if self.add_full_obs:
+            self.rf_values  = np.concatenate((self.rf_values_basic, np.array([self.gridsize])))
+        else:
+            self.rf_values = self.rf_values_basic
 
         self.learner_beliefs = 1. / (2 + 2 * self.num_colors) * np.ones((self.num_rf, self.gridsize, self.gridsize, 2 + 2 * self.num_colors))
 
@@ -393,14 +398,16 @@ class AlignedBayesianTeacher:
                  env: MultiGoalsEnv | MultiRoomsGoalsEnv,
                  num_colors: int=4,
                  rf_values: np.ndarray=np.array([3,5,7]),
-                 Na: int=6
+                 Na: int=6,
+                 add_full_obs: bool=True
                  ) -> None:
         
         self.Na = Na
         self.rf_values_basic = rf_values
+        self.add_full_obs = add_full_obs
 
         self.num_colors = num_colors
-        self.num_rf = len(rf_values) + 1
+        self.num_rf = len(rf_values) + 1 if self.add_full_obs else len(rf_values)
         
         # Init beliefs on the type of learner
         self.beliefs = 1. / ( num_colors * len(rf_values)) * np.ones((num_colors, self.num_rf))
@@ -413,7 +420,10 @@ class AlignedBayesianTeacher:
         self.env = env
         
         self.gridsize = self.env.height
-        self.rf_values = np.concatenate((self.rf_values_basic, np.array([self.gridsize])))
+        if self.add_full_obs:
+            self.rf_values  = np.concatenate((self.rf_values_basic, np.array([self.gridsize])))
+        else:
+            self.rf_values = self.rf_values_basic
 
         self.learner_beliefs = 1. / (2 + 2 * self.num_colors) * np.ones((self.num_rf, self.gridsize, self.gridsize, 2 + 2 * self.num_colors))
 
