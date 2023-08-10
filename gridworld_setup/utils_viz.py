@@ -18,11 +18,21 @@ from utils import Shannon_entropy
 # Visualization
 ##
 
-def plot_grid(start, num, size, alpha=0.5):
-    idx = np.linspace(start, size, num)
-    for x in idx:
-        plt.plot([x, x], [start, size], alpha=alpha, c='gray')
-        plt.plot([start, size], [x, x], alpha=alpha, c='gray')
+def plot_grid(start_x, num_x, size_x, alpha=0.5, \
+              start_y: int|None=None, num_y: int|None=None, size_y: int|None=None):
+    idx_x = np.linspace(start_x, size_x, num_x)
+    if start_y is None:
+        start_y = start_x
+    if num_y is None:
+        num_y = num_x 
+    if size_y is None:
+        size_y = size_x
+    idx_y = np.linspace(start_y, size_y, num_y)
+    
+    for x in idx_x:
+        plt.plot([x, x], [start_y, size_y], alpha=alpha, c='gray')
+    for y in idx_y:
+        plt.plot([start_x, size_x], [y, y], alpha=alpha, c='gray')
 
 def plot_agent_play(pos: tuple, dir: int, size: float=120) -> None:
     if dir == 0:
@@ -34,6 +44,29 @@ def plot_agent_play(pos: tuple, dir: int, size: float=120) -> None:
     elif dir == 3:
         marker = "^"
     plt.scatter(pos[0], pos[1], marker=marker, c='r', s=size)
+
+def plot_path(all_pos: list, img: np.ndarray, GRID_SIZE, shift: bool, color: str='r') -> None:
+    ratio = img.shape[0] / GRID_SIZE
+    length = len(all_pos)
+    if length > 1:
+        for i in range(0,length-1):
+            delta = 0.5 if shift else 0.
+            x1 = all_pos[i][0] + delta
+            x2 = all_pos[i+1][0] + delta
+            y1 = all_pos[i][1] + delta
+            y2 = all_pos[i+1][1] + delta
+            
+            u = x2 - x1
+            v = y2 -y1
+
+            arr_x = x1 + u/2
+            arr_y = y1 + v/2
+            norm = np.sqrt(u**2+v**2) 
+
+            plt.plot([x1 * ratio, x2 * ratio], [y1 * ratio, y2 * ratio], c='r')
+            if i % 2 == 0:
+                plt.quiver(arr_x * ratio, arr_y * ratio, u/norm, v/norm, angles="xy", pivot="mid", color=color)
+                
 
 def plot_agent_obs(pos: tuple, GRID_SIZE: int, img: np.ndarray, hide: bool=False, size: float | None=None) -> None:
     ratio = img.shape[0] / GRID_SIZE
@@ -92,15 +125,20 @@ def rgb_to_hex(rgb):
 def display_learner_play(GRID_SIZE: int, learner: BayesianLearner, size: int | None=None) -> list:
     ii = 0
     images = []
+    all_pos = [learner.env.agent_pos]
     while not learner.terminated:
         
         # Interaction
         _ = learner.play(size=1)
+        if learner.env.agent_pos != all_pos[-1]:
+            all_pos.append(learner.env.agent_pos)
 
         fig = plt.figure(figsize=(10,5))
         fig.add_subplot(1,2,1)
-        plt.imshow(learner.env.render())
-        plt.title(f'Agent (t={ii})')
+        img = learner.env.render()
+        plt.imshow(img)
+        plot_path(all_pos, img, GRID_SIZE, shift=True)
+        plt.title(f'Learner (t={ii})')
         plt.axis('off')
 
         fig.add_subplot(1,2,2)
@@ -108,6 +146,7 @@ def display_learner_play(GRID_SIZE: int, learner: BayesianLearner, size: int | N
         plt.imshow(learner_beliefs_image.T, vmin=0., vmax=1., cmap='gray')
         plot_agent_play(learner.env.agent_pos, learner.env.agent_dir, size=size)
         plot_grid(-.5, GRID_SIZE + 1, GRID_SIZE - 0.5, alpha=0.3)
+        plot_path(all_pos, learner_beliefs_image, GRID_SIZE, shift=False)
         # plt.colorbar(image)
         plt.title('Entropy learner beliefs')
         plt.axis('off')
@@ -131,6 +170,7 @@ def display_learner_play_teacher_infer(GRID_SIZE: int, learner: BayesianLearner,
     learner.env.highlight = True
     ii = 0
     images = []
+    all_pos = [learner.env.agent_pos]
     while not learner.terminated:
         
         # Interaction
@@ -140,10 +180,15 @@ def display_learner_play_teacher_infer(GRID_SIZE: int, learner: BayesianLearner,
         traj = learner.play(size=1)
         teacher.observe(action=traj[0])
 
+        if learner.env.agent_pos != all_pos[-1]:
+            all_pos.append(learner.env.agent_pos)
+
         fig = plt.figure(figsize=(20,5))
         fig.add_subplot(1,3,1)
-        plt.imshow(learner.env.render())
-        plt.title(f'Agent (t={ii})')
+        img = learner.env.render()
+        plt.imshow(img)
+        plot_path(all_pos, img, GRID_SIZE, shift=True)
+        plt.title(f'Learner (t={ii})')
         plt.axis('off')
 
         fig.add_subplot(1,3,2)
@@ -151,6 +196,7 @@ def display_learner_play_teacher_infer(GRID_SIZE: int, learner: BayesianLearner,
         image = plt.imshow(learner_beliefs_image.T, vmin=0., vmax=1., cmap='gray')
         plot_agent_play(teacher.env.agent_pos, teacher.env.agent_dir)
         plot_grid(-.5, GRID_SIZE + 1, GRID_SIZE - 0.5, alpha=0.3)
+        plot_path(all_pos, learner_beliefs_image, GRID_SIZE, shift=False)
         # plt.colorbar(image)
         plt.title('Entropy learner beliefs')
         plt.axis('off')
@@ -160,11 +206,12 @@ def display_learner_play_teacher_infer(GRID_SIZE: int, learner: BayesianLearner,
         image = plt.imshow(teacher.beliefs.T, vmin=0., vmax=1.)
         plt.colorbar(image)
         plt.xticks(range(0, num_colors), [IDX_TO_COLOR[i] for i in range(1, num_colors + 1)])
-        plt.yticks(range(0, len(teacher.rf_values)), teacher.rf_values)
+        plt.yticks(range(0, teacher.num_rf), teacher.rf_values)
         plt.title(f'Teacher belief about the learner \n {teacher.__class__.__name__}')
         plt.ylabel('Receptive field')
         plt.xlabel('Goal color')
-        plot_grid(-.5, 5, 3.5)
+        plot_grid(start_x=-.5, num_x=num_colors+1, size_x=num_colors-0.5, \
+                  start_y=-0.5, num_y=teacher.num_rf+1, size_y=teacher.num_rf-0.5)
         # plt.grid(True, which='major', linewidth=0.5)
 
         canvas = FigureCanvasAgg(fig)
@@ -186,6 +233,7 @@ def display_learner_play_teacher_infer_blind(learner: BayesianLearner,
     learner.env.highlight = False
     ii = 0
     images = []
+    all_pos = [learner.env.agent_pos]
     while not learner.terminated:
         
         # Interaction
@@ -195,10 +243,15 @@ def display_learner_play_teacher_infer_blind(learner: BayesianLearner,
         traj = learner.play(size=1)
         teacher.observe(action=traj[0])
 
+        if learner.env.agent_pos != all_pos[-1]:
+            all_pos.append(learner.env.agent_pos)
+
         fig = plt.figure(figsize=(10,5))
         fig.add_subplot(1,2,1)
-        plt.imshow(learner.env.render())
-        plt.title(f'Agent (t={ii})')
+        img = learner.env.render()
+        plt.imshow(img)
+        plot_path(all_pos, img, learner.env.height, shift=True)
+        plt.title(f'Learner (t={ii})')
         plt.axis('off')
 
         fig.add_subplot(1, 2, 2)
@@ -210,8 +263,87 @@ def display_learner_play_teacher_infer_blind(learner: BayesianLearner,
         plt.title(f'Teacher belief about the learner \n {teacher.__class__.__name__}')
         plt.ylabel('Receptive field')
         plt.xlabel('Goal color')
-        plot_grid(-.5, 5, 3.5)
+        plot_grid(start_x=-.5, num_x=num_colors+1, size_x=num_colors-0.5, \
+                  start_y=-0.5, num_y=teacher.num_rf+1, size_y=teacher.num_rf-0.5)
         # plt.grid(True, which='major', linewidth=0.5)
+
+        canvas = FigureCanvasAgg(fig)
+        canvas.draw()
+
+        # Get the image buffer as a PIL image
+        pil_image = Image.frombytes('RGB', canvas.get_width_height(), canvas.tostring_rgb())
+        images.append(pil_image)
+
+        clear_output(wait=True)
+        plt.show(fig)
+
+        ii += 1
+    return images
+
+def display_learner_play_teacher_infer_blind_with_uncertainty(learner: BayesianLearner, 
+                                                                teacher: AlignedBayesianTeacher | BayesianTeacher, 
+                                                                num_colors: int=4) -> list:
+    learner.env.highlight = False
+    ii = 0
+    ii_key = None
+    images = []
+    all_pos = [learner.env.agent_pos]
+    all_un = [Shannon_entropy(np.sum(teacher.beliefs, axis=1))]
+    if len(teacher.beliefs.shape) > 1:
+        all_un_rf = [Shannon_entropy(np.sum(teacher.beliefs, axis=0))]
+    while not learner.terminated:
+        
+        # Interaction
+        agent_pos = learner.env.agent_pos
+        agent_dir = learner.env.agent_dir
+        teacher.update_knowledge(learner_pos=agent_pos, learner_dir=agent_dir, learner_step_count=ii)
+        traj = learner.play(size=1)
+        teacher.observe(action=traj[0])
+
+        all_un.append(Shannon_entropy(np.sum(teacher.beliefs, axis=1)))
+        if teacher.beliefs.shape[1] > 1:
+            all_un_rf.append(Shannon_entropy(np.sum(teacher.beliefs, axis=0)))
+
+
+        if learner.env.agent_pos != all_pos[-1]:
+            all_pos.append(learner.env.agent_pos)
+
+        fig = plt.figure(figsize=(20,5))
+        fig.add_subplot(1, 3, 1)
+        img = learner.env.render()
+        plt.imshow(img)
+        plot_path(all_pos, img, learner.env.height, shift=True)
+        plt.title(f'Learner (t={ii})')
+        plt.axis('off')
+
+        fig.add_subplot(1, 3, 2)
+        plt.imshow(teacher.beliefs.T, vmin=0., vmax=1.)
+        image = plt.imshow(teacher.beliefs.T, vmin=0., vmax=1.)
+        plt.colorbar(image)
+        plt.xticks(range(0, num_colors), [IDX_TO_COLOR[i] for i in range(1, num_colors + 1)])
+        plt.yticks(range(0, len(teacher.rf_values)), teacher.rf_values)
+        plt.title(f'Teacher belief about the learner \n {teacher.__class__.__name__}')
+        plt.ylabel('Receptive field')
+        plt.xlabel('Goal color')
+        plot_grid(start_x=-.5, num_x=num_colors+1, size_x=num_colors-0.5, \
+                  start_y=-0.5, num_y=teacher.num_rf+1, size_y=teacher.num_rf-0.5)
+        
+        fig.add_subplot(1, 3, 3)
+        plt.plot(all_un, label='Uncertainty on the goal')
+        if teacher.beliefs.shape[1] > 1:
+            plt.plot(all_un_rf, label='Uncertainty on the receptive field')
+            plt.title('Uncertainty of the teacher about \n the goal and receptive fiel \n  of the learner (Shannon entropy)')
+            plt.legend()
+        else:
+            plt.title('Uncertainty of the teacher about \n the goal of the learner (Shannon entropy)')
+        plt.ylim(-0.1)
+        if (learner.env.carrying is not None) and (ii_key is None):
+            ii_key = ii
+        if ii_key is not None:
+            plt.plot([ii_key, ii_key], [0, np.max(all_un)], label='Learner grad the key', ls='--', c='r')
+            plt.legend()
+        plt.xlabel('Step')
+        plt.ylabel('Uncertainty (Shannon entropy)')
 
         canvas = FigureCanvasAgg(fig)
         canvas.draw()
@@ -230,12 +362,17 @@ def display_learner_obs_demo(GRID_SIZE: int, learner: BayesianLearner):
     learner.env.highlight = True
     ii = 0
     images = []
+    all_pos = [learner.pos[0]]
     for frame in learner.render_frames_observation:
+
+        if all_pos[-1] != learner.pos[ii]:
+            all_pos.append(learner.pos[ii])
 
         fig = plt.figure(figsize=(10,5))
         fig.add_subplot(1,2,1)
         plt.imshow(frame)
         plot_agent_obs(learner.pos[ii], GRID_SIZE, frame, hide=True)
+        plot_path(all_pos, frame, GRID_SIZE, True, color='w')
         plt.title(f'Demonstration (t={ii}) (teleoperate)')
         plt.axis('off')
 
@@ -244,6 +381,7 @@ def display_learner_obs_demo(GRID_SIZE: int, learner: BayesianLearner):
         plt.imshow(learner_beliefs_image, vmin=0., vmax=1., cmap='gray')
         plot_grid(-.5, GRID_SIZE + 1, GRID_SIZE - 0.5, alpha=0.3)
         plot_agent_obs(learner.pos[ii], GRID_SIZE, learner_beliefs_image, hide=False, size=20)
+        plot_path(all_pos, learner_beliefs_image, GRID_SIZE, False, color='w')
         plt.title('Entropy learner beliefs')
         plt.axis('off')
 
