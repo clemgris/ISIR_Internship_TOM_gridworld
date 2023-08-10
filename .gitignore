@@ -1,0 +1,9 @@
+__pycache__/
+figures/
+neural_network_ToM/__pycache__/
+neural_network_ToM/data/
+outputs/
+outputs_rendering/
+stats/
+stats_goal/
+gridworld_setup/neural_network_ToM/data/
