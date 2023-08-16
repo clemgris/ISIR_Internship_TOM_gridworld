@@ -3,6 +3,7 @@ import numpy as np
 
 from matplotlib.backends.backend_agg import FigureCanvasAgg
 import matplotlib.gridspec as gridspec
+from matplotlib.colors import LinearSegmentedColormap
 from IPython.display import clear_output
 from PIL import Image
 import csv
@@ -45,7 +46,8 @@ def plot_agent_play(pos: tuple, dir: int, size: float=120) -> None:
         marker = "^"
     plt.scatter(pos[0], pos[1], marker=marker, c='r', s=size)
 
-def plot_path(all_pos: list, img: np.ndarray, GRID_SIZE, shift: bool, color: str='r') -> None:
+def plot_path(all_pos: list, img: np.ndarray, GRID_SIZE, shift: bool, color: str='r',\
+              width: float|None=None, scale: bool=False) -> None:
     ratio = img.shape[0] / GRID_SIZE
     length = len(all_pos)
     if length > 1:
@@ -63,9 +65,10 @@ def plot_path(all_pos: list, img: np.ndarray, GRID_SIZE, shift: bool, color: str
             arr_y = y1 + v/2
             norm = np.sqrt(u**2+v**2) 
 
-            plt.plot([x1 * ratio, x2 * ratio], [y1 * ratio, y2 * ratio], c='r')
+            plt.plot([x1 * ratio, x2 * ratio], [y1 * ratio, y2 * ratio], c=color)
             if i % 2 == 0:
-                plt.quiver(arr_x * ratio, arr_y * ratio, u/norm, v/norm, angles="xy", pivot="mid", color=color)
+                scale_value = ratio if scale else None
+                plt.quiver(arr_x * ratio, arr_y * ratio, u/norm, v/norm, angles="xy", pivot="mid", color=color, width=width, scale=scale_value)
                 
 
 def plot_agent_obs(pos: tuple, GRID_SIZE: int, img: np.ndarray, hide: bool=False, size: float | None=None) -> None:
@@ -75,6 +78,8 @@ def plot_agent_obs(pos: tuple, GRID_SIZE: int, img: np.ndarray, hide: bool=False
     im_agent_pos =np.array([(pos[0] + 0.5) * ratio, (pos[1] + 0.5) * ratio]).astype('int')
     if hide:
         plt.scatter(im_agent_pos[0], im_agent_pos[1], color=rgb_to_hex((76, 76, 76)), marker='s', s=size)
+    else:
+        plt.scatter(im_agent_pos[0], im_agent_pos[1], color=rgb_to_hex((0, 0, 0)), marker='s', s=size)
     plt.scatter(im_agent_pos[0], im_agent_pos[1], c='w', marker='*', s=size)
 
 def plot_error_episode_length(colors: np.ndarray, rf_values: list, num_colors: int, dict: dict) -> None:
@@ -133,11 +138,11 @@ def display_learner_play(GRID_SIZE: int, learner: BayesianLearner, size: int | N
         if learner.env.agent_pos != all_pos[-1]:
             all_pos.append(learner.env.agent_pos)
 
-        fig = plt.figure(figsize=(10,5))
+        fig = plt.figure(figsize=(20,10))
         fig.add_subplot(1,2,1)
         img = learner.env.render()
         plt.imshow(img)
-        plot_path(all_pos, img, GRID_SIZE, shift=True)
+        plot_path(all_pos, img, GRID_SIZE, shift=True, width=0.004, scale=True)
         plt.title(f'Learner (t={ii})')
         plt.axis('off')
 
@@ -146,7 +151,7 @@ def display_learner_play(GRID_SIZE: int, learner: BayesianLearner, size: int | N
         plt.imshow(learner_beliefs_image.T, vmin=0., vmax=1., cmap='gray')
         plot_agent_play(learner.env.agent_pos, learner.env.agent_dir, size=size)
         plot_grid(-.5, GRID_SIZE + 1, GRID_SIZE - 0.5, alpha=0.3)
-        plot_path(all_pos, learner_beliefs_image, GRID_SIZE, shift=False)
+        plot_path(all_pos, learner_beliefs_image, GRID_SIZE, shift=False, width=0.004)
         # plt.colorbar(image)
         plt.title('Entropy learner beliefs')
         plt.axis('off')
@@ -359,7 +364,8 @@ def display_learner_play_teacher_infer_blind_with_uncertainty(learner: BayesianL
     return images
 
 def display_learner_obs_demo(GRID_SIZE: int, learner: BayesianLearner):
-    learner.env.highlight = True
+    learner.env.highlight = False
+    hide = learner.env.highlight
     ii = 0
     images = []
     all_pos = [learner.pos[0]]
@@ -368,11 +374,11 @@ def display_learner_obs_demo(GRID_SIZE: int, learner: BayesianLearner):
         if all_pos[-1] != learner.pos[ii]:
             all_pos.append(learner.pos[ii])
 
-        fig = plt.figure(figsize=(10,5))
+        fig = plt.figure(figsize=(20,10))
         fig.add_subplot(1,2,1)
         plt.imshow(frame)
-        plot_agent_obs(learner.pos[ii], GRID_SIZE, frame, hide=True)
-        plot_path(all_pos, frame, GRID_SIZE, True, color='w')
+        plot_agent_obs(learner.pos[ii], GRID_SIZE, frame, hide=hide, size=100)
+        plot_path(all_pos, frame, GRID_SIZE, True, color='w', width=0.004, scale=True)
         plt.title(f'Demonstration (t={ii}) (teleoperate)')
         plt.axis('off')
 
@@ -380,8 +386,8 @@ def display_learner_obs_demo(GRID_SIZE: int, learner: BayesianLearner):
         learner_beliefs_image = learner.render_beliefs_observation[ii]
         plt.imshow(learner_beliefs_image, vmin=0., vmax=1., cmap='gray')
         plot_grid(-.5, GRID_SIZE + 1, GRID_SIZE - 0.5, alpha=0.3)
-        plot_agent_obs(learner.pos[ii], GRID_SIZE, learner_beliefs_image, hide=False, size=20)
-        plot_path(all_pos, learner_beliefs_image, GRID_SIZE, False, color='w')
+        plot_agent_obs(learner.pos[ii], GRID_SIZE, learner_beliefs_image, hide=False, size=100)
+        plot_path(all_pos, learner_beliefs_image, GRID_SIZE, False, color='w', width=0.004)
         plt.title('Entropy learner beliefs')
         plt.axis('off')
 
@@ -528,7 +534,7 @@ def display_all_ToM(date: str, lamd_values: list, grid_size_values: list,
             else:
                 plt.errorbar(ii, np.mean(all_acc), yerr=1.96 * np.std(all_acc) / np.sqrt(len(all_acc)), color=colors[kk], fmt=markers[kk])
 
-    with open(f'./stats/{date}/aligned/stats_outputs_aligned.pickle', 'rb') as f:
+    with open(f'./stats/{date}/lambda_aligned/stats_outputs_lambd_aligned.pickle', 'rb') as f:
         DICT = pickle.load(f)
 
     kk += 1
@@ -554,7 +560,7 @@ def display_all_ToM(date: str, lamd_values: list, grid_size_values: list,
     plt.legend()
     plt.legend(loc=2);
 
-def display_cost(cost_fun):
+def display_cost(cost_fun, alpha):
     fig = plt.figure(figsize=(10,5))
 
     for l in [20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80]:
@@ -566,3 +572,129 @@ def display_cost(cost_fun):
     plt.ylabel('cost')
     plt.xlabel('delta_d')
     plt.legend();
+
+def display_learner_play_teacher_infer_blind_with_uncertainty_color(learner: BayesianLearner, 
+                                                                    teacher: AlignedBayesianTeacher | BayesianTeacher, 
+                                                                    num_colors: int=4) -> list:
+    green = np.array([0, 255, 0])
+    blue = np.array([0, 0, 255])
+    purple = np.array([148,0,211])
+    yellow = np.array([255, 234, 0])
+
+    goal_colors = [green, blue, purple, yellow]
+    colors_normalized = [[c[0] / 255, c[1] / 255, c[2] / 255] for c in goal_colors]
+
+    rf_3 = np.array([10]) 
+    rf_5 = np.array([100])
+    rf_7 = np.array([150])
+    full_obs = np.array([250])
+
+    rf_colors = [rf_3, rf_5, rf_7, full_obs]
+    values = [color[0] for color in rf_colors]
+
+    cmap_goal = LinearSegmentedColormap.from_list('custom_gradient', colors_normalized, N=100)
+    cmap_rf = LinearSegmentedColormap.from_list('custom_gray', ['black', 'white'], N=100)
+
+    learner.env.highlight = False
+    ii = 0
+    ii_key = None
+    images = []
+
+    goal_belief = np.sum(teacher.beliefs, axis=1)
+    print(goal_belief[1], goal_colors[1])
+    color = np.sum([goal_colors[i] * goal_belief[i] for i in range(num_colors)], axis=0)
+    all_colors_goal = [color]
+
+    all_pos = [learner.env.agent_pos]
+    all_un = [Shannon_entropy(np.sum(teacher.beliefs, axis=1))]
+    if teacher.beliefs.shape[1] > 1:
+        all_un_rf = [Shannon_entropy(np.sum(teacher.beliefs, axis=0))]
+        rf_belief = np.sum(teacher.beliefs, axis=0)
+        color = np.sum([rf_colors[i] * rf_belief[i] for i in range(4)], axis=0)
+        all_colors_rf = [color]
+    while not learner.terminated:
+        
+        # Interaction
+        agent_pos = learner.env.agent_pos
+        agent_dir = learner.env.agent_dir
+        teacher.update_knowledge(learner_pos=agent_pos, learner_dir=agent_dir, learner_step_count=ii)
+        traj = learner.play(size=1)
+        teacher.observe(action=traj[0])
+
+        all_un.append(Shannon_entropy(np.sum(teacher.beliefs, axis=1)))
+        if teacher.beliefs.shape[1] > 1:
+            all_un_rf.append(Shannon_entropy(np.sum(teacher.beliefs, axis=0)))
+
+
+        if learner.env.agent_pos != all_pos[-1]:
+            all_pos.append(learner.env.agent_pos)
+
+        fig = plt.figure(figsize=(20,5))
+        gs = gridspec.GridSpec(1, 2, width_ratios=[0.35, 0.65])
+
+        fig.add_subplot(gs[0])
+        img = learner.env.render()
+        plt.imshow(img)
+        plot_path(all_pos, img, learner.env.height, shift=True)
+        plt.title(f'Learner (t={ii})')
+        plt.axis('off')
+        
+        fig.add_subplot(gs[1])
+        goal_belief = np.sum(teacher.beliefs, axis=1)
+        color = np.sum([goal_colors[i] * goal_belief[i] for i in range(num_colors)], axis=0)
+        all_colors_goal.append(color)
+        for kk, color in enumerate(all_colors_goal):
+            plt.scatter([kk], [-0.15], marker='s', c=rgb_to_hex(color), s=200)
+
+        # Create colorbar for goal colors
+        cbar_goal = plt.colorbar(plt.cm.ScalarMappable(cmap=cmap_goal), orientation='vertical', ticks=np.linspace(0, 1, len(goal_colors)))
+        cbar_goal.ax.set_yticklabels(['Green', 'Blue', 'Purple', 'Yellow'])
+        cbar_goal.set_label('Goal color scale')
+
+        if teacher.beliefs.shape[1] > 1:
+            rf_belief = np.sum(teacher.beliefs, axis=0)
+            color = np.sum([rf_colors[i] * rf_belief[i] for i in range(4)], axis=0)
+            all_colors_rf.append(color)
+            for kk, color in enumerate(all_colors_rf):
+                plt.scatter([kk], [-0.35], marker='s', c=color, s=200, cmap='gray', vmin=0, vmax=255)
+
+            # Create colorbar for RF scale
+            tick_positions = np.linspace(0, 1, len(values))
+            cbar_rf = plt.colorbar(plt.cm.ScalarMappable(cmap=cmap_rf), orientation='vertical', ticks=tick_positions)
+            cbar_rf.ax.set_yticklabels(['RF_3', 'RF_5', 'RF_7', 'Full Obs'])  # Set labels for the values
+            cbar_rf.set_label('RF scale')
+
+            legend_place = (1.45, 1)
+        else:
+            legend_place = (1.15, 1)
+
+        plt.plot(all_un, label='Uncertainty on the goal')
+        if teacher.beliefs.shape[1] > 1:
+            plt.plot(all_un_rf, label='Uncertainty on \n the receptive field')
+            plt.title('Uncertainty of the teacher about \n the goal and receptive fiel \n  of the learner (Shannon entropy)')
+            plt.legend(loc='upper left', bbox_to_anchor=legend_place)
+        else:
+            plt.title('Uncertainty of the teacher about \n the goal of the learner (Shannon entropy)')
+            plt.legend(loc='upper left', bbox_to_anchor=legend_place)
+        plt.ylim(-0.5)
+
+        if (learner.env.carrying is not None) and (ii_key is None):
+            ii_key = ii
+        if ii_key is not None:
+            plt.plot([ii_key, ii_key], [0, np.max(all_un)], label='Learner grabs the key', ls='--', c='r')
+            plt.legend(loc='upper left', bbox_to_anchor=legend_place)
+        plt.xlabel('Step')
+        plt.ylabel('Uncertainty (Shannon entropy)')
+
+        canvas = FigureCanvasAgg(fig)
+        canvas.draw()
+
+        # Get the image buffer as a PIL image
+        pil_image = Image.frombytes('RGB', canvas.get_width_height(), canvas.tostring_rgb())
+        images.append(pil_image)
+
+        clear_output(wait=True)
+        plt.show(fig)
+
+        ii += 1
+    return images
