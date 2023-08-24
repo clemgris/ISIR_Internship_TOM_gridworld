@@ -12,7 +12,7 @@ import pickle
 from minigrid.core.constants import IDX_TO_COLOR
 
 from learner import BayesianLearner
-from bayesian_teacher import AlignedBayesianTeacher, BayesianTeacher
+from bayesian_ToM.bayesian_teacher import AlignedBayesianTeacher, BayesianTeacher
 from utils import Shannon_entropy
 
 ##
