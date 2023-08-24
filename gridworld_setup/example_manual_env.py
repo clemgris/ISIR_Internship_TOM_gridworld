@@ -10,6 +10,6 @@ def main():
     manual_control = ManualControl(env, seed=42)
     manual_control.start()
 
-    
+
 if __name__ == "__main__":
     main()
