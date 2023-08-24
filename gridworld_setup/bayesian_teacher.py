@@ -362,7 +362,7 @@ class BayesianTeacher:
         # Return the predicted reward
         return reward
     
-    def select_demo(self, cost_function: Callable[[int, int], float]=lambda x, l : exp_cost(x, l, alpha=0.3)) -> list:
+    def select_demo(self, cost_function: Callable[[int, int], float]=lambda x, l : exp_cost(l-x, l, alpha=0.3, beta=5)) -> list:
         goal_color_belief = np.sum(self.beliefs, axis=1)
         argmax_set = np.where(np.isclose(goal_color_belief, np.max(goal_color_belief)))[0]
         pred_goal_color = np.random.choice(argmax_set)
@@ -371,7 +371,11 @@ class BayesianTeacher:
             demo = generate_demo(self.env, rf, pred_goal_color)
             demos.append(demo)
 
-        l_max = np.max([len(demo) for demo in demos])
+        # Compute longest demo
+        demo_all = generate_demo_all(self.env)
+        l_max = len(demo_all)
+
+        demos.append(demo_all)
 
         predicted_utility = []
         for demo_idx,demo in enumerate(demos):
@@ -817,7 +821,7 @@ class AlignedBayesianTeacher:
         # Return the predicted reward
         return reward
     
-    def select_demo(self, cost_function: Callable[[int, int], float]=lambda x, l : exp_cost(x, l, alpha=0.3)) -> list:
+    def select_demo(self, cost_function: Callable[[int, int], float]=lambda x, l : exp_cost(l-x, l, alpha=0.3, beta=5)) -> list:
         goal_color_belief = np.sum(self.beliefs, axis=1)
         argmax_set = np.where(np.isclose(goal_color_belief, np.max(goal_color_belief)))[0]
         pred_goal_color = np.random.choice(argmax_set)
@@ -826,7 +830,12 @@ class AlignedBayesianTeacher:
             demo = generate_demo(self.env, rf, pred_goal_color)
             demos.append(demo)
 
-        l_max = np.max([len(demo) for demo in demos])
+        # Compute longest demo
+        demo_all = generate_demo_all(self.env)
+        l_max = len(demo_all)
+
+        demos.append(demo_all)
+
             
         predicted_utility = []
         for demo_idx,demo in enumerate(demos):
