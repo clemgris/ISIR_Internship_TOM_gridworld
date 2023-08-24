@@ -8,11 +8,14 @@ from typing import Callable
 
 from environment import MultiGoalsEnv, MultiRoomsGoalsEnv
 from utils import *
+# TODO: fix imports
 
 from .bayesian_teacher import BayesianTeacher
+# TODO: define the current directory as a package
 
 ##
 # Bayesian teacher that knows learner is using A* algo to compute the shortest path & active exploration
+# TODO: add messages like the one above in docstrings
 ##
 
 class AlignedBayesianTeacher(BayesianTeacher):

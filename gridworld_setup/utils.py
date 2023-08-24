@@ -19,6 +19,7 @@ def make_dirs(path):
 
 
 def draw(proba_dist: np.array) -> int:
+    # TODO: replace np.array by np.ndarray in type hints
     assert np.isclose(proba_dist.sum(), 1.0)
     rand_num = np.random.uniform(0, 1)
     cum_prob = np.cumsum(proba_dist)
@@ -31,7 +32,7 @@ def draw(proba_dist: np.array) -> int:
 
 def Shannon_entropy(proba_dist: np.array, axis: int = None) -> float | np.ndarray:
     # Compute the Shannon Entropy
-    tab = proba_dist * np.log2(proba_dist)
+    tab = proba_dist * np.log2(proba_dist)  # TODO: use scipy xlogy function instead to handle 0 log 0
     tab[np.isnan(tab)] = 0
     return -np.sum(tab, axis=axis, where=(proba_dist.any() != 0))
 
@@ -58,8 +59,9 @@ def get_neighbors(position, grid):
 
     return neighbors
 
-
+# TODO: add more specific type hints for collections (tuple, list, ...)
 def A_star_algorithm(start: tuple, goal: tuple, grid: np.ndarray) -> list | None:
+    # TODO: split algorithms from actual utility functions
     # Grid with 0 if empty cell 1 if object (i.e. obstacle)
     rows, cols = grid.shape
     visited = np.zeros((rows, cols), dtype=bool)
@@ -134,6 +136,7 @@ def map_actions(learner_pos: tuple, pos_dest: tuple, learner_dir: int) -> list:
     dx = learner_pos[0] - pos_dest[0]
     dy = learner_pos[1] - pos_dest[1]
     actions = []
+    # TODO: there has to be a better way to do what follows
     if dx < 0:
         if learner_dir == 0:
             actions.append(2)
@@ -497,7 +500,7 @@ def compute_opt_length(env: MultiGoalsEnv, goal_color: int):
 
 
 # Cost functions
-
+# TODO: put cost functions in a dedicated file
 
 def norm_linear_cost(x, l, alpha=0.15):
     return alpha * (1 - x / l)
