@@ -2,6 +2,7 @@ import numpy as np
 import os
 from minigrid.core.constants import DIR_TO_VEC
 from minigrid.core.actions import Actions
+from typing import Tuple, List
 
 from environment import MultiGoalsEnv, MultiRoomsGoalsEnv
 
@@ -264,6 +265,62 @@ def compute_learner_obs(pos: tuple, dir: int, receptive_field: int, env: MultiGo
     return obs, vis_mask
 
 
+def generate_traj(env: MultiGoalsEnv | MultiRoomsGoalsEnv,
+                  dest_pos: tuple,
+                  rf: int,
+                  grid: np.ndarray) -> list:
+    
+    obstacle_grid = grid.copy()
+
+    obstacle_grid[dest_pos[0], dest_pos[1]] = 0
+    path = A_star_algorithm(env.agent_pos, dest_pos, obstacle_grid)
+    
+    traj = []
+    ii = 0
+    while not obj_in_view(env.agent_pos, env.agent_dir, rf, dest_pos, env):
+        transition = path[ii]
+        actions = map_actions(env.agent_pos, transition[1], env.agent_dir)
+        for a in actions:
+            env.step(Actions(a))
+            traj.append(a)
+            if obj_in_view(env.agent_pos, env.agent_dir, rf, dest_pos, env):
+                break
+        ii += 1
+    return traj
+
+def generate_grid(env: MultiGoalsEnv | MultiRoomsGoalsEnv, num_colors: int=4) -> tuple:
+
+    gridsize = env.height
+    env_image = np.ones((gridsize, gridsize))
+    obs = env.grid.encode(np.ones((gridsize, gridsize)))
+
+    subgoals_pos = np.zeros((num_colors, 2))
+    goals_pos = np.zeros((num_colors, 2))
+    
+    for abs_j in range(0, gridsize):
+        for abs_i in range(0, gridsize):
+            color_idx = obs[abs_i, abs_j, 1]
+
+            # Goal
+            if obs[abs_i, abs_j, 0] == 4:
+                value = 3
+                goals_pos[color_idx - 1, :] = (abs_i, abs_j)
+            # Subgoal (key)
+            elif obs[abs_i, abs_j, 0] == 5:
+                value = 2
+                subgoals_pos[color_idx - 1, :] = (abs_i, abs_j)
+            # Wall
+            elif obs[abs_i, abs_j, 0] in [2, 5, 4]:
+                value = 1
+            # Nothing
+            else:
+                value= 0
+
+            env_image[abs_i, abs_j] = value
+    obstacle_grid = (env_image != 0)
+
+    return obstacle_grid, goals_pos, subgoals_pos
+
 def generate_demo(env: MultiGoalsEnv | MultiRoomsGoalsEnv, rf: int, goal_color: int):
     
     # Save current config of the env
@@ -277,30 +334,9 @@ def generate_demo(env: MultiGoalsEnv | MultiRoomsGoalsEnv, rf: int, goal_color: 
     env.reset_grid()
     
     # Get image of the env
-    env_image = np.ones((gridsize, gridsize))
-    obs = env.grid.encode(np.ones((gridsize, gridsize)))
-    
-    for abs_j in range(0, gridsize):
-        for abs_i in range(0, gridsize):
-            color_idx = obs[abs_i, abs_j, 1]
-
-            # Goal
-            if obs[abs_i, abs_j, 0] == 4 and color_idx == goal_color + 1:
-                value = 3
-                goal_pos = (abs_i, abs_j)
-            # Subgoal (key)
-            elif obs[abs_i, abs_j, 0] == 5 and color_idx == goal_color + 1:
-                value = 2
-                subgoal_pos = (abs_i, abs_j)
-            # Wall
-            elif obs[abs_i, abs_j, 0] in [2, 5, 4]:
-                value = 1
-            # Nothing
-            else:
-                value= 0
-
-            env_image[abs_i, abs_j] = value
-    obstacle_grid = (env_image != 0)
+    obstacle_grid, goals, subgoals = generate_grid(env)
+    goal_pos = tuple(goals[goal_color, :].astype(int))
+    subgoal_pos = tuple(subgoals[goal_color, :].astype(int).astype(int))
 
     # Create demo
     env.agent_view_size = rf
@@ -317,23 +353,54 @@ def generate_demo(env: MultiGoalsEnv | MultiRoomsGoalsEnv, rf: int, goal_color: 
 
     traj = []
     for g in Goals:
-        # Remove object g from obstacles
-        obstacle_grid[g[0], g[1]] = 0
-        # Compute shortest path
-        path = A_star_algorithm(env.agent_pos, g, obstacle_grid)
-        # Put object g in obtacles
-        obstacle_grid[g[0], g[1]] = 1
+        traj += generate_traj(env, dest_pos=g, rf=rf, grid=obstacle_grid)
 
-        ii = 0
-        while not obj_in_view(env.agent_pos, env.agent_dir, rf, g, env):
-            transition = path[ii]
-            actions = map_actions(env.agent_pos, transition[1], env.agent_dir)
-            for a in actions:
-                env.step(Actions(a))
-                traj.append(a)
-                if obj_in_view(env.agent_pos, env.agent_dir, rf, g, env):
-                    break
-            ii += 1
+    # Reset the position of the agent in the env and the env config
+    env.agent_view_size = prev_agent_view_size
+    env.reset_grid()
+    
+    return traj
+
+def generate_demo_all(env: MultiGoalsEnv | MultiRoomsGoalsEnv, min_rf: int=3):
+
+    rf = min_rf
+    
+    # Save current config of the env
+    prev_agent_view_size = env.agent_view_size
+    
+    gridsize = env.height
+    assert(env.height == env.width)
+
+    # Teacher has full observability
+    env.agent_view_size = gridsize
+    env.reset_grid()
+    
+    # Get image of the env
+    obstacle_grid, goals, subgoals = generate_grid(env)
+
+    # Create demo
+    env.agent_view_size = rf
+    env.reset_grid()
+
+    objects = np.concatenate((goals, subgoals))
+
+    is_obj_visited = np.zeros(objects.shape[0]).astype(bool)
+
+    traj = []
+    while not np.all(is_obj_visited):
+        max_dist = gridsize ** 2
+        for kk, obj in enumerate(objects):
+            obj = tuple(obj.astype(int))
+            if not is_obj_visited[kk]:
+                start = env.agent_pos
+                dist = Manhattan_dist(start, obj)
+                if dist < max_dist:
+                    goal = obj
+                    goal_idx = kk
+                    max_dist = dist
+
+        is_obj_visited[goal_idx] = True
+        traj += generate_traj(env, dest_pos=goal, rf=rf, grid=obstacle_grid)
 
     # Reset the position of the agent in the env and the env config
     env.agent_view_size = prev_agent_view_size
@@ -419,5 +486,5 @@ def norm_linear_cost(x, l, alpha=0.15):
 def linear(x, l, alpha=0.002):
     return alpha * (l-x) 
 
-def exp_cost(x, l, alpha=0.3):
-    return alpha * (np.exp( - x * alpha) - np.exp(-l * alpha))
+def exp_cost(x, l, alpha=0.3, beta=5):
+    return alpha * (np.exp( - x / l * beta) - np.exp(- beta))
