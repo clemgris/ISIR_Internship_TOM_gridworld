@@ -63,6 +63,8 @@ if __name__ == '__main__':
         for n in trange(num_data[ii]):
             for goal_color in range(args.num_colors):
                 for rf_idx,receptive_field in enumerate(rf_values_demo):
+
+                    # for demo_goal_color in range(args.num_colors): 
                     for demo_idx, demo_rf in enumerate(rf_values_demo):
 
                         # Observation environemnt
@@ -120,7 +122,7 @@ if __name__ == '__main__':
 
                             actions_demo_env.append(traj[0])
 
-                        size_init_traj = np.random.randint(0, len(actions_demo_env)-1)
+                        size_init_traj = np.random.randint(1, len(actions_demo_env)-1)
 
                         query_state = images_demo_env[size_init_traj]
                         futur_traj = actions_demo_env[size_init_traj]
