@@ -23,11 +23,11 @@ global_path = '/gpfswork/rech/kcr/uxv44vw/clemence/ISIR_internship_ToM_gridworld
 from utils import make_dirs
 from model import RegNet
 
-from metricelerate import metricelerator
-from metricelerate.utils import DistributedDataParallelKwargs
+from accelerate import metricelerator
+from accelerate.utils import DistributedDataParallelKwargs
 
 kwargs = DistributedDataParallelKwargs(find_unused_parameters=True)
-metricelerator = metricelerator(kwargs_handlers=[kwargs])
+accelerator = accelerator(kwargs_handlers=[kwargs])
 
 def parse_args():
     parser = argparse.ArgumentParser('Training prediction model')
@@ -134,9 +134,9 @@ if __name__ == '__main__':
     
     optimizer = optim.Adam(regnet.parameters(), lr=learning_rate)
 
-    regnet, optimizer, train_loader, val_loader, test_loader = metricelerator.prepare(regnet, optimizer, train_loader, val_loader, test_loader)
+    regnet, optimizer, train_loader, val_loader, test_loader = accelerator.prepare(regnet, optimizer, train_loader, val_loader, test_loader)
 
-    is_main_process = metricelerator.is_main_process
+    is_main_process = accelerator.is_main_process
 
     # Training loop
 
@@ -171,7 +171,7 @@ if __name__ == '__main__':
             optimizer.zero_grad()
 
             #loss.mean().backward()
-            metricelerator.backward(loss.mean())
+            accelerator.backward(loss.mean())
             optimizer.step()
 
             tot_loss += loss.item()
