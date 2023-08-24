@@ -668,9 +668,9 @@ def display_learner_play_teacher_infer_blind_with_uncertainty_color(learner: Bay
         else:
             legend_place = (1.15, 1)
 
-        plt.plot(all_un, label='Uncertainty on the goal')
+        plt.plot(all_un, label='Uncertainty on the goal', c='darkblue')
         if teacher.beliefs.shape[1] > 1:
-            plt.plot(all_un_rf, label='Uncertainty on \n the receptive field')
+            plt.plot(all_un_rf, label='Uncertainty on \n the receptive field', c='darkorange')
             plt.title('Uncertainty of the teacher about \n the goal and receptive fiel \n  of the learner (Shannon entropy)')
             plt.legend(loc='upper left', bbox_to_anchor=legend_place)
         else:
