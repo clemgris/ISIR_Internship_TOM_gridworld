@@ -37,7 +37,8 @@ class BayesianLearner:
         # Generate feasable environment
         feasible = False
         while not feasible:
-
+            
+            feasible = True
             # Generate env
             self.init_env(grid_size=grid_size,
                           num_colors=num_colors)
@@ -49,16 +50,13 @@ class BayesianLearner:
                 for j in range(self.env.width):
                     grid[i, j] = self.env.grid.get(i,j) is not None
 
-            subgoal_pos = self.env.obj_idx[2 * self.goal_color]
-            grid[subgoal_pos[0], subgoal_pos[1]] = 0
-            path_subgoal = A_star_algorithm(start=self.env.agent_pos, goal=subgoal_pos, grid=grid)
-            grid[subgoal_pos[0], subgoal_pos[1]] = 1
-
-            goal_pos = self.env.obj_idx[2 * self.goal_color - 1]
-            grid[goal_pos[0], goal_pos[1]] = 0
-            path_goal = A_star_algorithm(start=self.env.agent_pos, goal=goal_pos, grid=grid)
-
-            feasible = path_goal is not None and path_subgoal is not None
+            for obj_idx in self.env.obj_idx:
+                grid[obj_idx[0], obj_idx[1]] = 0
+                
+                path = A_star_algorithm(start=self.env.agent_pos, goal=obj_idx, grid=grid)
+                feasible = feasible and (path is not None)
+            
+                grid[obj_idx[0], obj_idx[1]] = 1
         
         self.reached_subgoal = False
 
@@ -95,6 +93,7 @@ class BayesianLearner:
                                     agent_view_size=self.receptive_field,
                                     num_colors=num_colors,
                                     max_steps=self.max_steps)
+            
         elif self.env_type == 'MultiRoomsGoalsEnv':
             self.env = MultiRoomsGoalsEnv(render_mode = self.render_mode,
                         agent_goal=self.goal_color,
