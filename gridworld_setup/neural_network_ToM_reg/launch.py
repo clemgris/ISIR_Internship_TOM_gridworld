@@ -66,7 +66,7 @@ for epoch in nb_epoch:
                 "set -x\n")
 
             fh.writelines(
-                f"srun bash -c 'python train.py -e {epoch} -b {batch_size} --data_filename {data_filename}'")
+                f"srun bash -c 'python train.py -e {epoch} -b {bs} --data_filename {data_filename}'")
 
         os.system("sbatch %s" % job_file)
         sleep(1)
