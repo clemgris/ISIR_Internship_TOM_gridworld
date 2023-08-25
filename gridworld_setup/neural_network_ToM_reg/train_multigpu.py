@@ -201,7 +201,7 @@ if __name__ == '__main__':
                 demo = demo.double().to(device)
                 target_reward = target_reward.double().to(device)
 
-                pred_reward, e_char, e_mental, query_state = regnet(past_traj, demo)
+                pred_reward, e_char, e_mental = regnet(past_traj, demo)
                 loss = criterion_mae(pred_reward, target_reward[..., None])
 
             tot_loss_val += loss.item()
