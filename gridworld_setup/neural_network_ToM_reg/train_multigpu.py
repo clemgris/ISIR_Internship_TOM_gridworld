@@ -23,11 +23,11 @@ global_path = '/gpfswork/rech/kcr/uxv44vw/clemence/ISIR_internship_ToM_gridworld
 from utils import make_dirs
 from model import RegNet
 
-from accelerate import accelerator
+from accelerate import Accelerator
 from accelerate.utils import DistributedDataParallelKwargs
 
 kwargs = DistributedDataParallelKwargs(find_unused_parameters=True)
-accelerator = accelerator(kwargs_handlers=[kwargs])
+accelerator = Accelerator(kwargs_handlers=[kwargs])
 
 def parse_args():
     parser = argparse.ArgumentParser('Training prediction model')
