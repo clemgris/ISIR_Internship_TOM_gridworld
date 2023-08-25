@@ -161,11 +161,11 @@ if __name__ == '__main__':
 
             past_traj = past_traj.double().to(device)
             demo = demo.double().to(device)
-            target_reward = target_reward.long().to(device)
+            target_reward = target_reward.double().to(device)
 
             pred_reward, e_char, e_mental = regnet(past_traj, demo)
 
-            loss = criterion_mse(pred_reward, target_reward)
+            loss = criterion_mse(pred_reward, target_reward[..., None])
 
             # Backpropagation
             optimizer.zero_grad()
@@ -176,7 +176,7 @@ if __name__ == '__main__':
 
             tot_loss += loss.item()
 
-            metric += criterion_mae(pred_reward, target_reward).item()
+            metric += criterion_mae(pred_reward, target_reward[..., None]).item()
 
         train_dict = dict(metric=metric / len(train_loader),
                           loss=tot_loss / len(train_loader))
@@ -199,13 +199,13 @@ if __name__ == '__main__':
                 
                 past_traj = past_traj.double().to(device)
                 demo = demo.double().to(device)
-                target_reward = target_reward.long().to(device)
+                target_reward = target_reward.double().to(device)
 
                 pred_reward, e_char, e_mental, query_state = regnet(past_traj, demo)
-                loss = criterion_mae(pred_reward, target_reward)
+                loss = criterion_mae(pred_reward, target_reward[..., None])
 
             tot_loss_val += loss.item()
-            metric_val += criterion_mae(pred_reward, target_reward).item()
+            metric_val += criterion_mae(pred_reward, target_reward[..., None]).item()
         
         eval_val_dict = dict(metric=metric_val / len(val_loader),
                              loss=tot_loss_val / len(val_loader))
@@ -265,13 +265,13 @@ if __name__ == '__main__':
             
             past_traj = past_traj.double().to(device)
             demo = demo.double().to(device)
-            target_reward = target_reward.long().to(device)
+            target_reward = target_reward.double().to(device)
 
             pred_reward, e_char, e_mental = regnet(past_traj, demo)
-            loss = criterion_mae(pred_reward, target_reward)
+            loss = criterion_mae(pred_reward, target_reward[..., None])
 
         tot_loss_test += loss.item()
-        metric_test += criterion_mae(pred_reward, target_reward).item()
+        metric_test += criterion_mae(pred_reward, target_reward[..., None]).item()
     
     eval_test_dict = dict(metric=metric_test / len(test_loader),
                           loss=tot_loss_test / len(test_loader))
