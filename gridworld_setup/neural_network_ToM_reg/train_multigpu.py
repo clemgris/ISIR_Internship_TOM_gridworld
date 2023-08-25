@@ -23,7 +23,7 @@ global_path = '/gpfswork/rech/kcr/uxv44vw/clemence/ISIR_internship_ToM_gridworld
 from utils import make_dirs
 from model import RegNet
 
-from accelerate import metricelerator
+from accelerate import acccelerator
 from accelerate.utils import DistributedDataParallelKwargs
 
 kwargs = DistributedDataParallelKwargs(find_unused_parameters=True)
