@@ -45,6 +45,7 @@ def plot_grid(
 
 
 def plot_agent_play(pos: tuple, dir: int, size: float = 120) -> None:
+    # TODO: use an enum of a dict (that would be global) to handle what lies below
     if dir == 0:
         marker = ">"
     elif dir == 1:
@@ -290,6 +291,7 @@ def display_learner_play_teacher_infer(
             range(0, num_colors), [IDX_TO_COLOR[i] for i in range(1, num_colors + 1)]
         )
         plt.yticks(range(0, teacher.num_rf), teacher.rf_values)
+        # TODO: code is duplicated here with the next function
         plt.title(f"Teacher belief about the learner \n {teacher.__class__.__name__}")
         plt.ylabel("Receptive field")
         plt.xlabel("Goal color")
@@ -685,7 +687,7 @@ def display_all_ToM(
     date: str,
     lamd_values: list,
     grid_size_values: list,
-    rf_values_basic: list = [3, 5, 7],
+    rf_values_basic: list = [3, 5, 7],  # TODO: default argument is mutable
     num_colors: int = 4,
 ) -> None:
     markers = ["*", "^", "o", "s", "d", "h", "x", "v"]

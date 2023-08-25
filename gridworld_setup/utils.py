@@ -10,6 +10,7 @@ from queue import PriorityQueue
 import heapq
 
 
+# TODO: use pathlib for this kind of purposes
 def make_dirs(path):
     try:
         os.makedirs(path)
@@ -23,6 +24,7 @@ def draw(proba_dist: np.array) -> int:
     assert np.isclose(proba_dist.sum(), 1.0)
     rand_num = np.random.uniform(0, 1)
     cum_prob = np.cumsum(proba_dist)
+    # TODO: replace what follows with a syntax based on next(iterable), replace enumerate by simple range
     for idx, _ in enumerate(proba_dist):
         if cum_prob[idx] >= rand_num:
             selected_idx = idx
@@ -37,11 +39,13 @@ def Shannon_entropy(proba_dist: np.array, axis: int = None) -> float | np.ndarra
     return -np.sum(tab, axis=axis, where=(proba_dist.any() != 0))
 
 
+# TODO: reformat the file to set function names to lowercase
 def Manhattan_dist(position, goal):
     # Calculate the Manhattan distance between two positions
     return abs(position[0] - goal[0]) + abs(position[1] - goal[1])
 
 
+# TODO: add more typing
 def get_neighbors(position, grid):
     # Get valid neighboring positions in the grid
     rows, cols = grid.shape
@@ -62,6 +66,7 @@ def get_neighbors(position, grid):
 # TODO: add more specific type hints for collections (tuple, list, ...)
 def A_star_algorithm(start: tuple, goal: tuple, grid: np.ndarray) -> list | None:
     # TODO: split algorithms from actual utility functions
+    # TODO: maybe create a class that will implement the algorithms (its name can be ShortestPath)
     # Grid with 0 if empty cell 1 if object (i.e. obstacle)
     rows, cols = grid.shape
     visited = np.zeros((rows, cols), dtype=bool)
@@ -101,6 +106,7 @@ def A_star_algorithm(start: tuple, goal: tuple, grid: np.ndarray) -> list | None
                 queue.put((f_scores[neighbor], neighbor))
 
     # If the goal is not reachable
+    # TODO: see if an empty list can be used instead or a null value
     return None
 
 
@@ -371,6 +377,7 @@ def generate_demo(env: MultiGoalsEnv | MultiRoomsGoalsEnv, rf: int, goal_color: 
     else:
         Goals = [goal_pos, subgoal_pos]
 
+    # TODO: replace this with a list comprehension (not trivial as the lists should be unpacked)
     traj = []
     for g in Goals:
         traj += generate_traj(env, dest_pos=g, rf=rf, grid=obstacle_grid)
