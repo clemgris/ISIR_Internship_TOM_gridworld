@@ -15,8 +15,9 @@ job_directory = "%s/results/" % os.getcwd()
 mkdir_p(job_directory)
 
 batch_size = [2]
-nb_epoch = [100] 
+nb_epoch = [100]
 
+data_filename = 'dataset_08.24.2023'
 
 for epoch in nb_epoch:
     for bs in batch_size:
@@ -65,7 +66,7 @@ for epoch in nb_epoch:
                 "set -x\n")
 
             fh.writelines(
-                "srun bash -c 'python train.py -e {} -b {}'".format(epoch, bs))
+                f"srun bash -c 'python train.py -e {epoch} -b {batch_size} --data_filename {data_filename}'")
 
         os.system("sbatch %s" % job_file)
         sleep(1)
