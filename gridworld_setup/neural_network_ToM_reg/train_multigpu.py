@@ -43,6 +43,8 @@ def parse_args():
 if __name__ == '__main__':
     args = parse_args()
 
+    is_main_process = accelerator.is_main_process
+
     loading_path = f'{global_path}/neural_network_ToM_reg/data/{args.data_filename}'
     config = json.load(open(os.path.join(loading_path, 'dataset_config.json')))
 
@@ -53,20 +55,23 @@ if __name__ == '__main__':
     else:
         raise ValueError('Unknown device type')
     
-    print(f'Working on device: {device} \n')
+    if is_main_process:
+        print(f'Working on device: {device} \n')
 
     # Dataset parameters
     grid_size, grid_size_demo = config['GRID_SIZE'], config['GRID_SIZE_DEMO']
 
-    print(f'Observation env size: {grid_size}')
-    print(f'Demonstration env size: {grid_size_demo} \n')
+    if is_main_process:
+        print(f'Observation env size: {grid_size}')
+        print(f'Demonstration env size: {grid_size_demo} \n')
 
     # Set the zero-padding --> model's size
     max_length_obs = grid_size * grid_size
     max_length_demo = + grid_size_demo * 10
 
-    print(f'Maximal length on obs env: {max_length_obs}')
-    print(f'Maximal length on demo env (demo): {max_length_demo} \n')
+    if is_main_process:
+        print(f'Maximal length on obs env: {max_length_obs}')
+        print(f'Maximal length on demo env (demo): {max_length_demo} \n')
 
     # Load data
     train_storage = Storage(args.data_filename,
@@ -88,13 +93,16 @@ if __name__ == '__main__':
     test_data = test_storage.extract()
 
     train_dataset = ToMNetDataset(**train_data)
-    print('Training data {}'.format(len(train_data['data_paths'])))
+    if is_main_process:
+        print('Training data {}'.format(len(train_data['data_paths'])))
 
     val_dataset = ToMNetDataset(**val_data)
-    print('Validation data {}'.format(len(val_data['data_paths'])))
+    if is_main_process:
+        print('Validation data {}'.format(len(val_data['data_paths'])))
 
     test_dataset = ToMNetDataset(**test_data)
-    print('Test data {} \n'.format(len(test_data['data_paths'])))
+    if is_main_process:
+        print('Test data {} \n'.format(len(test_data['data_paths'])))
 
     # Saving weights and training config parameters
     if args.saving_name is None:
@@ -135,8 +143,6 @@ if __name__ == '__main__':
     optimizer = optim.Adam(regnet.parameters(), lr=learning_rate)
 
     regnet, optimizer, train_loader, val_loader, test_loader = accelerator.prepare(regnet, optimizer, train_loader, val_loader, test_loader)
-
-    is_main_process = accelerator.is_main_process
 
     # Training loop
 

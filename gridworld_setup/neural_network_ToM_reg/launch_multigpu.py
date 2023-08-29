@@ -14,10 +14,10 @@ job_directory = "%s/results/" % os.getcwd()
 # Make top level directories
 mkdir_p(job_directory)
 
-batch_size = [2]
+batch_size = [4]
 nb_epoch = [100] 
 
-data_filename = 'dataset_08.24.2023'
+data_filename = 'dataset_08.25.2023'
 
 for epoch in nb_epoch:
     for bs in batch_size:

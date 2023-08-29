@@ -138,13 +138,13 @@ if __name__ == '__main__':
     best_model_loss = 1e10
     for epoch in range(n_epochs):
         train_dict = regnet.train(train_loader, optimizer)
-        train_msg ='Train| Epoch {} Loss | {:.4f} | Acc | {:.4f} | '.format(epoch, train_dict['loss'], 
+        train_msg ='Train| Epoch {} Loss | {:.4f} | Metric | {:.4f} | '.format(epoch, train_dict['loss'], 
                                                                                    train_dict['metric'])
         training_outputs[epoch] = dict(loss=train_dict['loss'],
                                        metric=train_dict['metric'])
         # Evaluate on the validation set
         eval_val_dict = regnet.evaluate(val_loader)
-        eval_val_msg ='Val| Loss | {:.4f} | Acc | {:.4f} | '.format(eval_val_dict['loss'], 
+        eval_val_msg ='Val| Loss | {:.4f} | Metric | {:.4f} | '.format(eval_val_dict['loss'], 
                                                                     eval_val_dict['metric'])
         validation_outputs[epoch] = dict(loss=eval_val_dict['loss'],
                                             metric=eval_val_dict['metric'])
@@ -186,7 +186,7 @@ if __name__ == '__main__':
 
     # Evaluation
     eval_test_dict = regnet.evaluate(test_loader)
-    eval_test_msg ='Eval on test| Epoch {} Loss | {:.4f} | Acc | {:.4f} | '.format(epoch, eval_test_dict['loss'], 
+    eval_test_msg ='Eval on test| Epoch {} Loss | {:.4f} | Metric | {:.4f} | '.format(epoch, eval_test_dict['loss'], 
                                                                                           eval_test_dict['metric'])
     test_outputs[n_epochs-1] = dict(loss=eval_test_dict['loss'],
                                     metric=eval_test_dict['metric'])
