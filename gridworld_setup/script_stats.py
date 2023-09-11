@@ -19,7 +19,6 @@ warnings.filterwarnings("ignore", category=RuntimeWarning)
 def parse_args():
     parser = argparse.ArgumentParser('Training prediction model')
     parser.add_argument('--GRID_SIZE', type=int, default=15),
-    parser.add_argument('--GRID_SIZE_DEMO', type=int, default=45)
     parser.add_argument('--num_colors', type=int, default=4)
     parser.add_argument('--alpha', type=float, default=0.8)
     parser.add_argument('--max_obs', type=int, default=None)
@@ -34,7 +33,7 @@ if __name__ == '__main__':
     # Parameters
 
     GRID_SIZE = args.GRID_SIZE
-    GRID_SIZE_DEMO = args.GRID_SIZE_DEMO
+    GRID_SIZE_DEMO = args.GRID_SIZE * 3
 
     num_colors = args.num_colors
 
