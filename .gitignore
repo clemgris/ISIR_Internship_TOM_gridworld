@@ -6,4 +6,6 @@ outputs/
 outputs_rendering/
 stats/
 stats_goal/
-gridworld_setup/neural_network_ToM/data/
+gridworld_setup/neural_network_ToM_reg/data/
+gridworld_setup/neural_network_ToM_pred/data/
+model_weights
