@@ -9,7 +9,7 @@ from PIL import Image
 import csv
 import pickle
 
-from minigrid.core.constants import IDX_TO_COLOR
+from minigrid.core.constants import IDX_TO_COLOR, COLORS
 
 from learner import BayesianLearner
 from bayesian_ToM.bayesian_teacher import AlignedBayesianTeacher, BayesianTeacher
@@ -46,8 +46,14 @@ def plot_agent_play(pos: tuple, dir: int, size: float=120) -> None:
         marker = "^"
     plt.scatter(pos[0], pos[1], marker=marker, c='r', s=size)
 
-def plot_path(all_pos: list, img: np.ndarray, GRID_SIZE, shift: bool, color: str='r',\
-              width: float|None=None, scale: bool=False) -> None:
+def plot_path(all_pos: list, 
+              img: np.ndarray, 
+              GRID_SIZE, shift: 
+              bool, color: str='r',\
+              width: float | None = None,
+              linewidth: float | None = None, 
+              scale: bool = False) -> None:
+    
     ratio = img.shape[0] / GRID_SIZE
     length = len(all_pos)
     if length > 1:
@@ -65,7 +71,7 @@ def plot_path(all_pos: list, img: np.ndarray, GRID_SIZE, shift: bool, color: str
             arr_y = y1 + v/2
             norm = np.sqrt(u**2+v**2) 
 
-            plt.plot([x1 * ratio, x2 * ratio], [y1 * ratio, y2 * ratio], c=color)
+            plt.plot([x1 * ratio, x2 * ratio], [y1 * ratio, y2 * ratio], c=color, linewidth=linewidth)
             if i % 2 == 0:
                 scale_value = ratio if scale else None
                 plt.quiver(arr_x * ratio, arr_y * ratio, u/norm, v/norm, angles="xy", pivot="mid", color=color, width=width, scale=scale_value)
@@ -127,7 +133,11 @@ def rgb_to_hex(rgb):
 # Display for Jupiter Notebook
 ##
 
-def display_learner_play(GRID_SIZE: int, learner: BayesianLearner, size: int | None=None) -> list:
+def display_learner_play(GRID_SIZE: int, 
+                         learner: BayesianLearner, 
+                         size: int | None=None,
+                         width: float = 0.004,
+                         linewidth: int | None = None) -> list:
     ii = 0
     images = []
     all_pos = [learner.env.agent_pos]
@@ -142,7 +152,7 @@ def display_learner_play(GRID_SIZE: int, learner: BayesianLearner, size: int | N
         fig.add_subplot(1,2,1)
         img = learner.env.render()
         plt.imshow(img)
-        plot_path(all_pos, img, GRID_SIZE, shift=True, width=0.004, scale=True)
+        plot_path(all_pos, img, GRID_SIZE, shift=True, width=width, scale=True, linewidth=linewidth)
         plt.title(f'Learner (t={ii})')
         plt.axis('off')
 
@@ -151,7 +161,7 @@ def display_learner_play(GRID_SIZE: int, learner: BayesianLearner, size: int | N
         plt.imshow(learner_beliefs_image.T, vmin=0., vmax=1., cmap='gray')
         plot_agent_play(learner.env.agent_pos, learner.env.agent_dir, size=size)
         plot_grid(-.5, GRID_SIZE + 1, GRID_SIZE - 0.5, alpha=0.3)
-        plot_path(all_pos, learner_beliefs_image, GRID_SIZE, shift=False, width=0.004)
+        plot_path(all_pos, learner_beliefs_image, GRID_SIZE, shift=False, width=width, linewidth=linewidth)
         # plt.colorbar(image)
         plt.title('Entropy learner beliefs')
         plt.axis('off')
@@ -171,7 +181,8 @@ def display_learner_play(GRID_SIZE: int, learner: BayesianLearner, size: int | N
 
 def display_learner_play_teacher_infer(GRID_SIZE: int, learner: BayesianLearner, 
                                        teacher: AlignedBayesianTeacher | BayesianTeacher, 
-                                       num_colors: int=4) -> list:
+                                       num_colors: int=4,
+                                       linewidth: int | None = None) -> list:
     learner.env.highlight = True
     ii = 0
     images = []
@@ -192,7 +203,7 @@ def display_learner_play_teacher_infer(GRID_SIZE: int, learner: BayesianLearner,
         fig.add_subplot(1,3,1)
         img = learner.env.render()
         plt.imshow(img)
-        plot_path(all_pos, img, GRID_SIZE, shift=True)
+        plot_path(all_pos, img, GRID_SIZE, shift=True, linewidth=linewidth)
         plt.title(f'Learner (t={ii})')
         plt.axis('off')
 
@@ -201,7 +212,7 @@ def display_learner_play_teacher_infer(GRID_SIZE: int, learner: BayesianLearner,
         image = plt.imshow(learner_beliefs_image.T, vmin=0., vmax=1., cmap='gray')
         plot_agent_play(teacher.env.agent_pos, teacher.env.agent_dir)
         plot_grid(-.5, GRID_SIZE + 1, GRID_SIZE - 0.5, alpha=0.3)
-        plot_path(all_pos, learner_beliefs_image, GRID_SIZE, shift=False)
+        plot_path(all_pos, learner_beliefs_image, GRID_SIZE, shift=False, linewidth=linewidth)
         # plt.colorbar(image)
         plt.title('Entropy learner beliefs')
         plt.axis('off')
@@ -234,7 +245,9 @@ def display_learner_play_teacher_infer(GRID_SIZE: int, learner: BayesianLearner,
 
 def display_learner_play_teacher_infer_blind(learner: BayesianLearner, 
                                              teacher: AlignedBayesianTeacher | BayesianTeacher, 
-                                             num_colors: int=4) -> list:
+                                             num_colors: int=4,
+                                             width: float | None = None,
+                                             linewidth: int | None = None) -> list:
     learner.env.highlight = False
     ii = 0
     images = []
@@ -252,10 +265,10 @@ def display_learner_play_teacher_infer_blind(learner: BayesianLearner,
             all_pos.append(learner.env.agent_pos)
 
         fig = plt.figure(figsize=(10,5))
-        fig.add_subplot(1,2,1)
+        fig.add_subplot(1, 2, 1)
         img = learner.env.render()
         plt.imshow(img)
-        plot_path(all_pos, img, learner.env.height, shift=True)
+        plot_path(all_pos, img, learner.env.height, shift=True, width=width, linewidth=linewidth)
         plt.title(f'Learner (t={ii})')
         plt.axis('off')
 
@@ -287,7 +300,8 @@ def display_learner_play_teacher_infer_blind(learner: BayesianLearner,
 
 def display_learner_play_teacher_infer_blind_with_uncertainty(learner: BayesianLearner, 
                                                                 teacher: AlignedBayesianTeacher | BayesianTeacher, 
-                                                                num_colors: int=4) -> list:
+                                                                num_colors: int=4,
+                                                                linewidth: int | None = None) -> list:
     learner.env.highlight = False
     ii = 0
     ii_key = None
@@ -317,7 +331,7 @@ def display_learner_play_teacher_infer_blind_with_uncertainty(learner: BayesianL
         fig.add_subplot(1, 3, 1)
         img = learner.env.render()
         plt.imshow(img)
-        plot_path(all_pos, img, learner.env.height, shift=True)
+        plot_path(all_pos, img, learner.env.height, shift=True, linewidth=linewidth)
         plt.title(f'Learner (t={ii})')
         plt.axis('off')
 
@@ -345,7 +359,7 @@ def display_learner_play_teacher_infer_blind_with_uncertainty(learner: BayesianL
         if (learner.env.carrying is not None) and (ii_key is None):
             ii_key = ii
         if ii_key is not None:
-            plt.plot([ii_key, ii_key], [0, np.max(all_un)], label='Learner grad the key', ls='--', c='r')
+            plt.plot([ii_key, ii_key], [0, np.max(all_un)], label='Learner grabs the key', ls='--', c='r')
             plt.legend()
         plt.xlabel('Step')
         plt.ylabel('Uncertainty (Shannon entropy)')
@@ -363,7 +377,12 @@ def display_learner_play_teacher_infer_blind_with_uncertainty(learner: BayesianL
         ii += 1
     return images
 
-def display_learner_obs_demo(GRID_SIZE: int, learner: BayesianLearner):
+def display_learner_obs_demo(GRID_SIZE: int, 
+                             learner: BayesianLearner, 
+                             width: float | None = 0.004,
+                             start_size: int = 100,
+                             linewidth: int | None = None):
+    
     learner.env.highlight = False
     hide = learner.env.highlight
     ii = 0
@@ -377,8 +396,8 @@ def display_learner_obs_demo(GRID_SIZE: int, learner: BayesianLearner):
         fig = plt.figure(figsize=(20,10))
         fig.add_subplot(1,2,1)
         plt.imshow(frame)
-        plot_agent_obs(learner.pos[ii], GRID_SIZE, frame, hide=hide, size=100)
-        plot_path(all_pos, frame, GRID_SIZE, True, color='w', width=0.004, scale=True)
+        plot_agent_obs(learner.pos[ii], GRID_SIZE, frame, hide=hide, size=start_size)
+        plot_path(all_pos, frame, GRID_SIZE, True, color='w', width=width, scale=True, linewidth=linewidth)
         plt.title(f'Demonstration (t={ii}) (teleoperate)')
         plt.axis('off')
 
@@ -386,8 +405,8 @@ def display_learner_obs_demo(GRID_SIZE: int, learner: BayesianLearner):
         learner_beliefs_image = learner.render_beliefs_observation[ii]
         plt.imshow(learner_beliefs_image, vmin=0., vmax=1., cmap='gray')
         plot_grid(-.5, GRID_SIZE + 1, GRID_SIZE - 0.5, alpha=0.3)
-        plot_agent_obs(learner.pos[ii], GRID_SIZE, learner_beliefs_image, hide=False, size=100)
-        plot_path(all_pos, learner_beliefs_image, GRID_SIZE, False, color='w', width=0.004)
+        plot_agent_obs(learner.pos[ii], GRID_SIZE, learner_beliefs_image, hide=False, size=start_size)
+        plot_path(all_pos, learner_beliefs_image, GRID_SIZE, False, color='w', width=width, linewidth=linewidth)
         plt.title('Entropy learner beliefs')
         plt.axis('off')
 
@@ -576,10 +595,10 @@ def display_cost(cost_fun, alpha):
 def display_learner_play_teacher_infer_blind_with_uncertainty_color(learner: BayesianLearner, 
                                                                     teacher: AlignedBayesianTeacher | BayesianTeacher, 
                                                                     num_colors: int=4) -> list:
-    green = np.array([0, 255, 0])
-    blue = np.array([0, 0, 255])
-    purple = np.array([148,0,211])
-    yellow = np.array([255, 234, 0])
+    green = COLORS[IDX_TO_COLOR[1]] #np.array([0, 255, 0])
+    blue = COLORS[IDX_TO_COLOR[2]] #np.array([0, 0, 255])
+    purple = COLORS[IDX_TO_COLOR[3]] #np.array([148,0,211])
+    yellow = COLORS[IDX_TO_COLOR[4]] #np.array([255, 234, 0])
 
     goal_colors = [green, blue, purple, yellow]
     colors_normalized = [[c[0] / 255, c[1] / 255, c[2] / 255] for c in goal_colors]
@@ -629,7 +648,7 @@ def display_learner_play_teacher_infer_blind_with_uncertainty_color(learner: Bay
         if learner.env.agent_pos != all_pos[-1]:
             all_pos.append(learner.env.agent_pos)
 
-        fig = plt.figure(figsize=(20,5))
+        fig = plt.figure(figsize=(17,5))
         gs = gridspec.GridSpec(1, 2, width_ratios=[0.35, 0.65])
 
         fig.add_subplot(gs[0])
@@ -671,13 +690,13 @@ def display_learner_play_teacher_infer_blind_with_uncertainty_color(learner: Bay
         plt.plot(all_un, label='Uncertainty on the goal', c='darkblue')
         if teacher.beliefs.shape[1] > 1:
             plt.plot(all_un_rf, label='Uncertainty on \n the receptive field', c='darkorange')
-            plt.title('Uncertainty of the teacher about \n the goal and receptive fiel \n  of the learner (Shannon entropy)')
+            plt.title('Uncertainty of the teacher about the goal and \n receptive fiel of the learner (Shannon entropy)')
             plt.legend(loc='upper left', bbox_to_anchor=legend_place)
         else:
             plt.title('Uncertainty of the teacher about \n the goal of the learner (Shannon entropy)')
             plt.legend(loc='upper left', bbox_to_anchor=legend_place)
         plt.ylim(-0.5)
-
+        plt.grid('on')
         if (learner.env.carrying is not None) and (ii_key is None):
             ii_key = ii
         if ii_key is not None:
