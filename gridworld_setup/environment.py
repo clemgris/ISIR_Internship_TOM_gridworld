@@ -149,7 +149,7 @@ class MultiGoalsEnv(MiniGridEnv):
         obs, reward, terminated, truncated, info = super().step(action)
 
         if action == self.actions.toggle:
-            if self.doors[self.agent_goal-1].is_open:
+            if self.doors[self.agent_goal - 1].is_open:
                 reward = self._reward()
                 terminated = True
 
