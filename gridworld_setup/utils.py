@@ -3,6 +3,7 @@ import os
 from minigrid.core.constants import DIR_TO_VEC
 from minigrid.core.actions import Actions
 from typing import Tuple, List
+import random
 
 from environment import MultiGoalsEnv, MultiRoomsGoalsEnv
 
@@ -342,8 +343,10 @@ def generate_demo(env: MultiGoalsEnv | MultiRoomsGoalsEnv, rf: int, goal_color: 
     env.agent_view_size = rf
     env.reset_grid()
 
-    subgoal_dist = Manhattan_dist(env.agent_pos, subgoal_pos)
-    goal_dist = Manhattan_dist(env.agent_pos, goal_pos)
+    obstacle_grid
+
+    subgoal_dist = Dijkstra(np.array(obstacle_grid, dtype='float'), subgoal_pos[0], subgoal_pos[1])[env.agent_pos[0], env.agent_pos[0]]
+    goal_dist = Dijkstra(np.array(obstacle_grid, dtype='float'), goal_pos[0], goal_pos[1])[env.agent_pos[0], env.agent_pos[0]]
     
     # Go first to the closest object
     if subgoal_dist < goal_dist:
@@ -383,6 +386,57 @@ def generate_demo_all(env: MultiGoalsEnv | MultiRoomsGoalsEnv, min_rf: int=3):
     env.reset_grid()
 
     objects = np.concatenate((goals, subgoals))
+
+    is_obj_visited = np.zeros(objects.shape[0]).astype(bool)
+
+    traj = []
+    while not np.all(is_obj_visited):
+        max_dist = gridsize ** 2
+        for kk, obj in enumerate(objects):
+            obj = tuple(obj.astype(int))
+            if not is_obj_visited[kk]:
+                start = env.agent_pos
+                dist = Dijkstra(np.array(obstacle_grid, dtype='float'), obj[0], obj[1])[start[0], start[0]]
+                if dist < max_dist:
+                    goal = obj
+                    goal_idx = kk
+                    max_dist = dist
+
+        is_obj_visited[goal_idx] = True
+        traj += generate_traj(env, dest_pos=goal, rf=rf, grid=obstacle_grid)
+
+    # Reset the position of the agent in the env and the env config
+    env.agent_view_size = prev_agent_view_size
+    env.reset_grid()
+    
+    return traj
+
+def generate_random_demo(env: MultiGoalsEnv | MultiRoomsGoalsEnv, 
+                         n_obj: int, 
+                         min_rf: int=3):
+
+    rf = min_rf
+    
+    # Save current config of the env
+    prev_agent_view_size = env.agent_view_size
+    
+    gridsize = env.height
+    assert(env.height == env.width)
+
+    # Teacher has full observability
+    env.agent_view_size = gridsize
+    env.reset_grid()
+    
+    # Get image of the env
+    obstacle_grid, goals, subgoals = generate_grid(env)
+
+    # Create demo
+    env.agent_view_size = rf
+    env.reset_grid()
+
+    objects = np.concatenate((goals, subgoals))
+    # Pick n_obj random objects to show
+    objects = objects[np.array(random.sample(list(np.arange(0, objects.shape[0])), n_obj))]
 
     is_obj_visited = np.zeros(objects.shape[0]).astype(bool)
 
