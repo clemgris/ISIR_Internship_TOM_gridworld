@@ -7,6 +7,8 @@ from utils import *
 import numpy as np
 from queue import SimpleQueue
 
+import matplotlib.pyplot as plt
+
 from typing import Callable
 
 ##
@@ -325,9 +327,11 @@ class BayesianTeacher:
 
     def predicted_reward(self, demo: list, goal_color: int, rf_idx: int) -> float:
         current_receptve_field = self.env.agent_view_size
+        current_env_goal = self.env.agent_goal
 
         # Reset env AND estimate beliefs of the learner
         self.env.agent_view_size = self.rf_values[rf_idx]
+        self.env.agent_goal = goal_color + 1
         self.env.reset_grid()
         self.init_env(self.env)
 
@@ -357,33 +361,35 @@ class BayesianTeacher:
             
         # Reset env
         self.env.agent_view_size = current_receptve_field
+        self.env.agent_gaol = current_env_goal
         self.env.reset_grid()
 
         # Return the predicted reward
         return reward
     
-    def select_demo(self, cost_function: Callable[[int, int], float]=lambda x, l : exp_cost(l-x, l, alpha=0.3, beta=5)) -> list:
+    def select_demo(self, l_max: int, cost_function: Callable[[int, int], float], all_demos: list | None = None) -> list:
         goal_color_belief = np.sum(self.beliefs, axis=1)
-        argmax_set = np.where(np.isclose(goal_color_belief, np.max(goal_color_belief)))[0]
-        pred_goal_color = np.random.choice(argmax_set)
-        demos = []
-        for rf in self.rf_values:
-            demo = generate_demo(self.env, rf, pred_goal_color)
-            demos.append(demo)
 
-        # Compute longest demo
-        demo_all = generate_demo_all(self.env)
-        l_max = len(demo_all)
+        if np.isclose(np.max(goal_color_belief), 1):
+            pred_goal_color = np.argmax(goal_color_belief)
+            demos = []
+            for rf in self.rf_values:
+                demo = generate_demo(self.env, rf, pred_goal_color)
+                demos.append(demo)
 
-        demos.append(demo_all)
-
+        else:
+            demos = all_demos
+        
         predicted_utility = []
-        for demo_idx,demo in enumerate(demos):
+        for demo_idx, demo in enumerate(demos):
             pred_u = 0
-            for rf_idx_demo, _ in enumerate(self.rf_values):
-                hat_r = self.predicted_reward(demo, pred_goal_color, rf_idx_demo)
-                cost = cost_function(len(demo), l_max)
-                pred_u += (hat_r - cost) * self.beliefs[pred_goal_color, rf_idx_demo]
+            for pred_goal_color in range(self.num_colors):
+                for pred_rf_idx, _ in enumerate(self.rf_values):
+                    weight = self.beliefs[pred_goal_color, pred_rf_idx]
+                    if not np.isclose(weight, 0):
+                        hat_r = self.predicted_reward(demo, pred_goal_color, pred_rf_idx)
+                        cost = cost_function(len(demo), l_max)
+                        pred_u += (hat_r - cost) * weight
             predicted_utility.append(pred_u)
 
         argmax_set = np.where(np.isclose(predicted_utility, np.max(predicted_utility)))[0]
@@ -392,6 +398,7 @@ class BayesianTeacher:
         predicted_best_utility = np.max(predicted_utility)
 
         return demos[demo_idx], demo_idx, predicted_best_utility, demos
+    
 ##          
 # Bayesian teacher that knows learner is using A* algo to compute the shortest path & active exploration
 ##
@@ -784,9 +791,11 @@ class AlignedBayesianTeacher:
 
     def predicted_reward(self, demo: list, goal_color: int, rf_idx: int) -> float:
         current_receptve_field = self.env.agent_view_size
+        current_env_goal = self.env.agent_goal
 
         # Reset env AND estimate beliefs of the learner
         self.env.agent_view_size = self.rf_values[rf_idx]
+        self.env.agent_goal = goal_color + 1
         self.env.reset_grid()
         self.init_env(self.env)
 
@@ -816,34 +825,35 @@ class AlignedBayesianTeacher:
             
         # Reset env
         self.env.agent_view_size = current_receptve_field
+        self.env.agent_gaol = current_env_goal
         self.env.reset_grid()
 
         # Return the predicted reward
         return reward
     
-    def select_demo(self, cost_function: Callable[[int, int], float]=lambda x, l : exp_cost(l-x, l, alpha=0.3, beta=5)) -> list:
+    def select_demo(self, l_max: int, cost_function: Callable[[int, int], float], all_demos: list | None = None) -> list:
         goal_color_belief = np.sum(self.beliefs, axis=1)
-        argmax_set = np.where(np.isclose(goal_color_belief, np.max(goal_color_belief)))[0]
-        pred_goal_color = np.random.choice(argmax_set)
-        demos = []
-        for rf in self.rf_values:
-            demo = generate_demo(self.env, rf, pred_goal_color)
-            demos.append(demo)
 
-        # Compute longest demo
-        demo_all = generate_demo_all(self.env)
-        l_max = len(demo_all)
+        if np.isclose(np.max(goal_color_belief), 1):
+            pred_goal_color = np.argmax(goal_color_belief)
+            demos = []
+            for rf in self.rf_values:
+                demo = generate_demo(self.env, rf, pred_goal_color)
+                demos.append(demo)
 
-        demos.append(demo_all)
-
-            
+        else:
+            demos = all_demos
+        
         predicted_utility = []
-        for demo_idx,demo in enumerate(demos):
+        for demo_idx, demo in enumerate(demos):
             pred_u = 0
-            for rf_idx_demo, _ in enumerate(self.rf_values):
-                hat_r = self.predicted_reward(demo, pred_goal_color, rf_idx_demo)
-                cost = cost_function(len(demo), l_max)
-                pred_u += (hat_r - cost) * self.beliefs[pred_goal_color, rf_idx_demo]
+            for pred_goal_color in range(self.num_colors):
+                for pred_rf_idx, _ in enumerate(self.rf_values):
+                    weight = self.beliefs[pred_goal_color, pred_rf_idx]
+                    if not np.isclose(weight, 0):
+                        hat_r = self.predicted_reward(demo, pred_goal_color, pred_rf_idx)
+                        cost = cost_function(len(demo), l_max)
+                        pred_u += (hat_r - cost) * weight
             predicted_utility.append(pred_u)
 
         argmax_set = np.where(np.isclose(predicted_utility, np.max(predicted_utility)))[0]
@@ -852,3 +862,4 @@ class AlignedBayesianTeacher:
         predicted_best_utility = np.max(predicted_utility)
 
         return demos[demo_idx], demo_idx, predicted_best_utility, demos
+    
