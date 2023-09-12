@@ -21,7 +21,7 @@ def parse_args():
     parser.add_argument('--GRID_SIZE', type=int, default=15),
     parser.add_argument('--num_colors', type=int, default=4)
     parser.add_argument('--alpha', type=float, default=0.8)
-    parser.add_argument('--max_obs', type=int, default=None)
+    parser.add_argument('--max_obs', type=int, default=-1)
     parser.add_argument('--num_trials', type=int, default=200)
     args = parser.parse_args()
     return args
@@ -55,7 +55,7 @@ if __name__ == '__main__':
 
     N = args.num_trials
 
-    if args.max_obs is None:
+    if args.max_obs == -1:
         max_obs = GRID_SIZE ** 2
     else:
         max_obs = args.max_obs
@@ -211,5 +211,5 @@ if __name__ == '__main__':
                 utility = true_utility[goal_color, rf_idx, selected_demo_idx]
                 DICT_UTIL['uniform_model'][goal_color, receptive_field].append(utility)
 
-    with open(save_filename, 'wb') as f:
-            pickle.dump(DICT_UTIL, f)
+            with open(save_filename, 'wb') as f:
+                    pickle.dump(DICT_UTIL, f)
